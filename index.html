@@ -189,4 +189,77 @@
         bgGeo.setAttribute('position', new THREE.BufferAttribute(bgPos, 3));
         const bgMat = new THREE.PointsMaterial({
             color: 0x44aa88, size: 0.5, transparent: true, opacity: 0.6, 
-            blending
+            blending: THREE.AdditiveBlending
+        });
+        const bgSystem = new THREE.Points(bgGeo, bgMat);
+        scene.add(bgSystem);
+
+        // --- 4. 交互修复 ---
+        async function init() {
+            const video = document.getElementById('video-input');
+            const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
+            
+            hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.5 });
+            hands.onResults((res) => {
+                if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
+                    const lm = res.multiHandLandmarks[0];
+                    // 改进判定：计算大拇指尖(4)和食指尖(8)的距离，
+                    // 并且除以手掌大小(0->9的距离)进行归一化，防止远近影响
+                    const handSize = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y);
+                    const fingerGap = Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y);
+                    
+                    // 如果指尖距离小于手掌大小的 30%，认为是握拳
+                    const ratio = fingerGap / (handSize + 0.001); 
+                    targetMorph = THREE.MathUtils.smoothstep(ratio, 0.2, 0.6);
+                } else {
+                    targetMorph = 0;
+                }
+            });
+
+            const cam = new Camera(video, {
+                onFrame: async () => { await hands.send({image: video}); },
+                width: 480, height: 360
+            });
+            
+            cam.start().then(() => {
+                document.getElementById('ui').innerHTML = "🎅 握拳变礼物 · 张手变星星";
+                setTimeout(() => { document.getElementById('ui').style.opacity = 0; }, 3000);
+            });
+        }
+
+        // --- 5. 循环 ---
+        function loop() {
+            requestAnimationFrame(loop);
+            const t = performance.now() * 0.001;
+            mat.uniforms.uTime.value = t;
+            
+            // 平滑形态
+            currentMorph += (targetMorph - currentMorph) * 0.05;
+            mat.uniforms.uMorph.value = currentMorph;
+            
+            // 场景缓慢旋转
+            scene.rotation.y += 0.002;
+            
+            // 背景粒子缓慢上升
+            const positions = bgSystem.geometry.attributes.position.array;
+            for(let i=1; i<bgCount*3; i+=3) {
+                positions[i] += 0.01;
+                if(positions[i] > 20) positions[i] = -20;
+            }
+            bgSystem.geometry.attributes.position.needsUpdate = true;
+
+            composer.render();
+        }
+
+        init();
+        loop();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
