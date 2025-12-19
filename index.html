@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>The Winter Gift</title>
 <style>
-    /* 引入高级字体 */
+    /* 引入高奢字体 */
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@300&display=swap');
 
     body { 
         margin: 0; overflow: hidden; 
-        background-color: #050505; /* 深邃黑 */
+        background-color: #020205; /* 深邃午夜黑，比纯黑更有质感 */
         font-family: 'Lato', sans-serif;
     }
     
@@ -18,25 +18,23 @@
         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
         pointer-events: none; z-index: 10;
         display: flex; flex-direction: column; justify-content: center; align-items: center;
-        background: radial-gradient(circle, rgba(0,0,0,0) 40%, rgba(0,0,0,0.8) 100%); /* 边缘暗角 */
+        background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.8) 100%); /* 边缘暗角 */
     }
 
-    /* 高奢标题 */
     h1 {
         font-family: 'Cinzel', serif; color: #DAA520; /* 香槟金 */
-        font-size: clamp(1.5rem, 5vw, 2.5rem); letter-spacing: 8px; text-transform: uppercase;
+        font-size: clamp(1.5rem, 5vw, 3rem); letter-spacing: 6px; text-transform: uppercase;
         margin-bottom: 20px; text-align: center;
-        text-shadow: 0 0 20px rgba(218, 165, 32, 0.5);
-        animation: fadeText 3s infinite alternate;
+        text-shadow: 0 0 20px rgba(218, 165, 32, 0.6);
+        animation: breath 4s infinite ease-in-out;
     }
 
     p {
-        color: rgba(255,255,255,0.4); font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+        color: rgba(255,255,255,0.4); font-size: 10px; letter-spacing: 4px; text-transform: uppercase;
         margin-top: 10px;
     }
 
-    @keyframes fadeText { from { opacity: 0.8; } to { opacity: 1; text-shadow: 0 0 40px rgba(218, 165, 32, 0.8); } }
-
+    @keyframes breath { 0% { opacity: 0.7; } 50% { opacity: 1; text-shadow: 0 0 40px rgba(218, 165, 32, 0.9); } 100% { opacity: 0.7; } }
 </style>
 <script src="https://lib.baomitu.com/three.js/r128/three.min.js"></script>
 </head>
@@ -45,56 +43,58 @@
 <div id="ui-layer">
     <div>
         <h1>The Winter Gift</h1>
-        <p style="text-align:center;">Tap Screen to Open</p>
+        <p style="text-align:center;">Touch Screen to Open</p>
     </div>
 </div>
 
 <div id="canvas-container"></div>
 
 <script>
-    // --- 1. 核心配置 (找回高奢配色) ---
+    // --- 1. 高奢配色配置 ---
     const CONFIG = {
-        count: 20000, // 粒子数量
+        count: 18000, // 粒子数：平衡点
         colors: {
-            red: new THREE.Color(0xD10056),      // 宝石红
-            gold: new THREE.Color(0xFFD700),     // 纯金
-            green: new THREE.Color(0x004422),    // 祖母绿
-            white: new THREE.Color(0xFFFFFF)     // 银白微光
+            red: new THREE.Color(0xD10056),      // 宝石红 (Rubine)
+            gold: new THREE.Color(0xFFD700),     // 纯金 (Gold)
+            green: new THREE.Color(0x004422),    // 祖母绿 (Emerald)
+            silver: new THREE.Color(0xE0E0E0)    // 铂金 (Platinum)
         }
     };
 
-    // --- 2. 场景 ---
+    // --- 2. 场景搭建 ---
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x050505, 0.02);
+    scene.fog = new THREE.FogExp2(0x020205, 0.025); // 增加深邃感
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, 0, 8.5);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 限制像素比，防止手机发热
     document.body.appendChild(renderer.domElement);
 
-    // --- 3. 材质：找回“柔光”质感 ---
+    // --- 3. 核心：自发光纹理 (无需后期处理也能发光) ---
     function createGlowTexture() {
         const canvas = document.createElement('canvas');
         canvas.width = 64; canvas.height = 64;
         const ctx = canvas.getContext('2d');
         const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        // 核心：极亮的中心 + 柔和的边缘
         grad.addColorStop(0, 'rgba(255, 255, 255, 1)'); 
-        grad.addColorStop(0.3, 'rgba(255, 255, 255, 0.5)'); 
+        grad.addColorStop(0.2, 'rgba(255, 255, 255, 0.8)'); 
+        grad.addColorStop(0.5, 'rgba(255, 255, 255, 0.2)'); 
         grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, 64, 64);
         return new THREE.CanvasTexture(canvas);
     }
 
-    // --- 4. 粒子系统 ---
+    // --- 4. 粒子系统架构 ---
     const geometry = new THREE.BufferGeometry();
     const pos = [];
     const col = [];
     const sizes = [];
-    const randoms = [];
+    const randoms = []; // 用于独立闪烁
     
     const targetGift = [];
     const targetTree = [];
@@ -103,62 +103,67 @@
 
     for(let i=0; i<CONFIG.count; i++) {
         randoms.push(Math.random());
-
-        // --- 礼物形态 ---
+        
+        // --- 形态A：赛博礼物盒 ---
         let gx = (Math.random()-0.5) * 3.5;
         let gy = (Math.random()-0.5) * 3.5;
         let gz = (Math.random()-0.5) * 3.5;
         
         // 丝带逻辑 (十字交叉)
-        let isRibbon = Math.abs(gx)<0.3 || Math.abs(gy)<0.3;
-        if(isRibbon) { gx*=1.02; gy*=1.02; gz*=1.02; }
-        
+        let isRibbon = Math.abs(gx)<0.4 || Math.abs(gy)<0.4;
+        if(isRibbon) { 
+            // 丝带稍微外凸，更有立体感
+            gx *= 1.05; gy *= 1.05; gz *= 1.05; 
+        }
         targetGift.push(gx, gy, gz);
         
-        // 礼物颜色：红盒子 + 金丝带
+        // 礼物颜色：红盒 + 金丝带
         let cG = isRibbon ? CONFIG.colors.gold : CONFIG.colors.red;
         colorGift.push(cG.r, cG.g, cG.b);
 
-        // --- 树形态 ---
+        // --- 形态B：流光圣诞树 ---
         let angle = i * 0.1;
         let h = (i/CONFIG.count)*7 - 3.5;
         let r = (3.5 - h) * 0.45;
         
-        // 金色流光逻辑 (每10个粒子有一个是流光)
-        let isStreamer = (i % 10 === 0);
         let tx, ty, tz, cT, size;
-
+        
+        // 金色流光 (每12个粒子选一个做流光)
+        let isStreamer = (i % 12 === 0);
+        
         if (isStreamer) {
-            // 双螺旋光带
-            let offset = (i%20===0) ? 0 : Math.PI;
-            let r_spiral = r * 1.2; // 比树大一圈
+            // 双螺旋结构
+            let offset = (i%24===0) ? 0 : Math.PI;
+            let r_spiral = r * 1.3; // 光环比树大
             tx = Math.cos(angle*2 + offset) * r_spiral;
             ty = h;
             tz = Math.sin(angle*2 + offset) * r_spiral;
             cT = CONFIG.colors.gold;
-            size = Math.random() * 0.2 + 0.1; // 光带粒子大
+            size = Math.random() * 0.2 + 0.15; // 光点大
         } else {
-            // 树身
-            let jitter = 0.2;
+            // 树身主体
+            let jitter = 0.25;
             tx = Math.cos(angle)*r + (Math.random()-0.5)*jitter;
             ty = h + (Math.random()-0.5)*jitter;
             tz = Math.sin(angle)*r + (Math.random()-0.5)*jitter;
-            // 树顶星星
-            if(i > CONFIG.count - 200) {
-                 tx*=0.1; ty=3.6+Math.random()*0.4; tz*=0.1;
+            
+            // 树顶
+            if(i > CONFIG.count - 300) {
+                 tx*=0.1; ty=3.8+Math.random()*0.4; tz*=0.1;
                  cT = CONFIG.colors.gold;
+                 size = Math.random() * 0.3 + 0.1;
             } else {
                  cT = CONFIG.colors.green;
-                 // 混合一点银白
-                 if(Math.random()>0.9) cT = CONFIG.colors.white;
+                 // 混入一点铂金闪光
+                 if(Math.random()>0.92) { cT = CONFIG.colors.silver; }
+                 size = Math.random() * 0.1 + 0.03; // 树叶微尘
             }
-            size = Math.random() * 0.1 + 0.02; // 树叶粒子小
         }
         
         targetTree.push(tx, ty, tz);
         colorTree.push(cT.r, cT.g, cT.b);
 
-        // 初始化
+        // 初始状态
         pos.push(gx, gy, gz);
         col.push(cG.r, cG.g, cG.b);
         sizes.push(size);
@@ -171,17 +176,17 @@
     const material = new THREE.PointsMaterial({
         vertexColors: true,
         map: createGlowTexture(),
-        blending: THREE.AdditiveBlending,
+        blending: THREE.AdditiveBlending, // 关键：叠加混合模式 (物理发光)
         depthWrite: false,
         transparent: true,
-        opacity: 0.8,
-        sizeAttenuation: true // 开启近大远小
+        opacity: 0.9,
+        sizeAttenuation: true
     });
 
     const particles = new THREE.Points(geometry, material);
     scene.add(particles);
 
-    // --- 5. 动画循环 ---
+    // --- 5. 动画与交互 ---
     let mode = 0; // 0=Gift, 1=Tree
     let morph = 0;
     let time = 0;
@@ -190,28 +195,27 @@
         requestAnimationFrame(animate);
         time += 0.015;
 
-        // 平滑过渡
+        // 缓动动画
         morph += (mode - morph) * 0.05;
 
         const p = geometry.attributes.position.array;
         const c = geometry.attributes.color.array;
 
         for(let i=0; i<CONFIG.count; i++) {
-            const ix = i*3;
-            const iy = i*3+1;
-            const iz = i*3+2;
+            const ix=i*3, iy=i*3+1, iz=i*3+2;
 
             // 位置插值
             const px = targetGift[ix] * (1-morph) + targetTree[ix] * morph;
             const py = targetGift[iy] * (1-morph) + targetTree[iy] * morph;
             const pz = targetGift[iz] * (1-morph) + targetTree[iz] * morph;
 
-            // 呼吸律动 (礼物微动，树大幅波动)
-            const breathe = Math.sin(time + randoms[i]*10) * (0.02 + morph*0.03);
-
-            p[ix] = px + Math.cos(time + randoms[i]*5)*0.01;
+            // 呼吸律动 (Tree状态下波动更大)
+            const breathe = Math.sin(time + randoms[i]*10) * (0.01 + morph*0.02);
+            
+            // 简单的噪声模拟
+            p[ix] = px + Math.cos(time + randoms[i]*5) * 0.01;
             p[iy] = py + breathe;
-            p[iz] = pz + Math.sin(time + randoms[i]*5)*0.01;
+            p[iz] = pz + Math.sin(time + randoms[i]*5) * 0.01;
 
             // 颜色插值
             c[ix] = colorGift[ix] * (1-morph) + colorTree[ix] * morph;
@@ -222,22 +226,19 @@
         geometry.attributes.position.needsUpdate = true;
         geometry.attributes.color.needsUpdate = true;
         
-        // 旋转展示
+        // 整体旋转展示
         particles.rotation.y = time * 0.1;
         
         renderer.render(scene, camera);
     }
     animate();
 
-    // --- 6. 交互 ---
+    // --- 交互：点击任意位置切换 ---
+    const toggle = () => { mode = mode === 0 ? 1 : 0; };
     window.addEventListener('mousedown', toggle);
     window.addEventListener('touchstart', (e) => { e.preventDefault(); toggle(); }, {passive: false});
 
-    function toggle() {
-        mode = mode === 0 ? 1 : 0;
-    }
-
-    // 自适应
+    // 窗口自适应
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
