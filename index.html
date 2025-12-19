@@ -2,15 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cyber Christmas Magic</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Starlight Tarot Christmas</title>
     <style>
-        body { margin: 0; overflow: hidden; background: radial-gradient(circle at center, #001510 0%, #000000 100%); }
-        #loading {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            color: #10ffaa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            letter-spacing: 5px; text-transform: uppercase; font-size: 12px;
-        }
+        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #00ffcc; letter-spacing: 3px; z-index: 100; }
+        /* 隐藏摄像头预览，但逻辑在运行 */
+        #video-input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+        #canvas-container { width: 100vw; height: 100vh; }
     </style>
     <script type="importmap">
         {
@@ -22,111 +21,99 @@
     </script>
 </head>
 <body>
-    <div id="loading">Gathering Stardust...</div>
+    <div id="loading">MAGICAL POWER LOADING...</div>
+    <video id="video-input" playsinline></video>
     <div id="canvas-container"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
     <script type="module">
         import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
         import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
         import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 
-        // --- 场景设置 ---
+        let uMorph = 0; // 0=礼物, 1=树
+
+        // --- 1. 场景与高级渲染器 ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 2, 12);
+        camera.position.set(0, 1, 10);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.autoRotate = true;
-        controls.autoRotateSpeed = 0.2;
-
-        // --- 极光发光效果 (Bloom) ---
         const composer = new EffectComposer(renderer);
         composer.addPass(new RenderPass(scene, camera));
-        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 2.5, 0.5, 0.1);
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 2.5, 0.4, 0.85);
         composer.addPass(bloomPass);
 
-        // --- 粒子系统数据 ---
-        const count = 40000;
+        // --- 2. 极致粒子着色器 (The Silk Shader) ---
+        const count = 50000;
         const geo = new THREE.BufferGeometry();
-        const posGift = new Float32Array(count * 3);
-        const posTree = new Float32Array(count * 3);
+        const positions = new Float32Array(count * 3);
+        const targetPos = new Float32Array(count * 3);
         const randoms = new Float32Array(count);
 
         for (let i = 0; i < count; i++) {
             const i3 = i * 3;
-            // 礼物盒：更有质感的空心立方体
-            posGift[i3] = (Math.random() - 0.5) * 4;
-            posGift[i3+1] = (Math.random() - 0.5) * 4;
-            posGift[i3+2] = (Math.random() - 0.5) * 4;
+            // 礼物形态 (凝聚态粒子)
+            positions[i3] = (Math.random() - 0.5) * 3.5;
+            positions[i3+1] = (Math.random() - 0.5) * 3.5;
+            positions[i3+2] = (Math.random() - 0.5) * 3.5;
 
-            // 圣诞树：双螺旋星云结构
-            const progress = i / count;
-            const angle = progress * Math.PI * 25; // 旋转圈数
-            const radius = Math.pow(1.0 - progress, 1.5) * 4.5;
-            const y = progress * 10 - 4;
+            // 圣诞树形态 (多重螺旋丝绸结构)
+            const branch = i % 12; // 12条丝绸带
+            const ratio = i / count;
+            const angle = ratio * Math.PI * 18 + (branch * (Math.PI * 2 / 12));
+            const radius = Math.pow(1.0 - ratio, 1.2) * 4.0;
             
-            // 加入随机扰动让树看起来更茂盛
-            const spread = (Math.random() - 0.5) * 0.5;
-            posTree[i3] = Math.cos(angle) * (radius + spread);
-            posTree[i3+1] = y + (Math.random() - 0.5) * 0.2;
-            posTree[i3+2] = Math.sin(angle) * (radius + spread);
+            targetPos[i3] = Math.cos(angle) * radius;
+            targetPos[i3+1] = ratio * 10 - 4;
+            targetPos[i3+2] = Math.sin(angle) * radius;
 
             randoms[i] = Math.random();
         }
 
-        geo.setAttribute('position', new THREE.BufferAttribute(posGift, 3));
-        geo.setAttribute('aTarget', new THREE.BufferAttribute(posTree, 3));
+        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geo.setAttribute('aTarget', new THREE.BufferAttribute(targetPos, 3));
         geo.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 1));
 
-        // --- 艺术级着色器 (The Master Shader) ---
         const mat = new THREE.ShaderMaterial({
             uniforms: {
                 uTime: { value: 0 },
                 uMorph: { value: 0 },
-                uColor1: { value: new THREE.Color("#00ffcc") }, // 翡翠
-                uColor2: { value: new THREE.Color("#ffdd44") }, // 纯金
-                uColor3: { value: new THREE.Color("#ff2255") }  // 霓虹红
+                uColor1: { value: new THREE.Color("#00ffcc") },
+                uColor2: { value: new THREE.Color("#ffdd44") },
+                uColor3: { value: new THREE.Color("#ff1155") }
             },
             vertexShader: `
                 uniform float uTime;
                 uniform float uMorph;
-                uniform vec3 uColor1;
-                uniform vec3 uColor2;
-                uniform vec3 uColor3;
                 attribute vec3 aTarget;
                 attribute float aRandom;
                 varying vec3 vColor;
                 varying float vAlpha;
 
-                // 简单的噪波函数实现
-                float hash(float n) { return fract(sin(n) * 43758.5453123); }
-
                 void main() {
                     vec3 pos = mix(position, aTarget, uMorph);
                     
-                    // 加入流体波动感
-                    float wave = sin(uTime * 1.5 + pos.y * 2.0 + aRandom * 6.28) * 0.15;
-                    pos.x += wave;
-                    pos.z += wave;
+                    // 丝绸拉丝动画：沿Y轴旋转
+                    float rotAngle = uTime * (0.2 + aRandom * 0.3);
+                    float s = sin(rotAngle); float c = cos(rotAngle);
+                    pos.xz *= mat2(c, -s, s, c);
 
-                    // 颜色逻辑：根据高度和形态切换
-                    vec3 treeColor = mix(uColor1, uColor2, (pos.y + 4.0) / 8.0);
-                    vColor = mix(uColor3, treeColor, uMorph);
+                    // 颜色插值：根据高度
+                    vec3 treeCol = mix(vec3(0.0, 1.0, 0.6), vec3(1.0, 0.8, 0.2), (pos.y + 4.0)/8.0);
+                    vColor = mix(vec3(1.0, 0.1, 0.3), treeCol, uMorph);
                     
-                    // 让一部分粒子闪烁
-                    float twinkle = sin(uTime * 5.0 + aRandom * 10.0) * 0.5 + 0.5;
-                    vAlpha = twinkle * aRandom;
+                    vAlpha = smoothstep(0.0, 0.1, aRandom); // 随机闪烁因子
 
                     vec4 mvPos = modelViewMatrix * vec4(pos, 1.0);
-                    gl_PointSize = (15.0 * aRandom + 5.0) * (10.0 / -mvPos.z);
+                    gl_PointSize = (12.0 * aRandom + 4.0) * (10.0 / -mvPos.z);
                     gl_Position = projectionMatrix * mvPos;
                 }
             `,
@@ -134,13 +121,13 @@
                 varying vec3 vColor;
                 varying float vAlpha;
                 void main() {
-                    // 星芒纹理
-                    float dist = distance(gl_PointCoord, vec2(0.5));
-                    float glow = 0.05 / dist;
-                    glow = clamp(glow, 0.0, 1.0);
-                    glow = pow(glow, 1.8);
+                    // 星芒核心：非对称拉丝效果
+                    vec2 uv = gl_PointCoord - vec2(0.5);
+                    float len = length(uv);
+                    float star = 0.01 / len + 0.005 / abs(uv.x * 10.0) + 0.005 / abs(uv.y * 10.0);
                     
-                    gl_FragColor = vec4(vColor * glow, glow * vAlpha);
+                    vec3 color = vColor * star * vAlpha;
+                    gl_FragColor = vec4(color, star);
                 }
             `,
             transparent: true,
@@ -149,63 +136,56 @@
         });
 
         const points = new THREE.Points(geo, mat);
-        scene.add(particles); // 注意：这里如果是手动打的请改为 scene.add(points);
         scene.add(points);
 
-        // --- 抽奖文字 (全息质感) ---
-        function createHoloText(text) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 1024; canvas.height = 256;
-            const ctx = canvas.getContext('2d');
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillStyle = '#fff';
-            ctx.font = 'italic bold 80px sans-serif';
-            // 添加外发光
-            ctx.shadowBlur = 30; ctx.shadowColor = '#00ffcc';
-            ctx.fillText(text, 512, 128);
-            return new THREE.CanvasTexture(canvas);
-        }
-
-        const prizePlane = new THREE.Mesh(
-            new THREE.PlaneGeometry(8, 2),
-            new THREE.MeshBasicMaterial({ map: createHoloText(""), transparent: true, opacity: 0 })
-        );
-        prizePlane.position.y = 1;
-        scene.add(prizePlane);
-
-        // --- 自动演示逻辑 ---
-        let morphState = 0;
-        const prizes = ["答应你一个要求 ✨", "带你去吃大餐 🍲", "清空你的购物车 🛒", "专属按摩一次 💆"];
+        // --- 3. MediaPipe 手势集成 ---
+        const videoElement = document.getElementById('video-input');
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
         
-        setInterval(() => {
-            morphState = morphState === 0 ? 1 : 0;
-            if(morphState === 1) {
-                setTimeout(() => {
-                    const win = prizes[Math.floor(Math.random() * prizes.length)];
-                    prizePlane.material.map = createHoloText(win);
-                }, 1000);
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults((results) => {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+                // 计算食指尖和手掌根部的距离来判断张合度
+                const dist = Math.hypot(landmarks[8].x - landmarks[0].x, landmarks[8].y - landmarks[0].y);
+                // 映射距离到 uMorph: 张开越大，dist越大，morph越接近1
+                uMorph = THREE.MathUtils.clamp((dist - 0.15) * 3.0, 0, 1);
+            } else {
+                // 没手时慢慢变回礼物
+                uMorph = THREE.MathUtils.lerp(uMorph, 0, 0.05);
             }
-        }, 6000);
+        });
 
-        // --- 渲染循环 ---
+        const cameraFeed = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 640, height: 480
+        });
+        cameraFeed.start();
+
+        // --- 4. 动画循环 ---
         const clock = new THREE.Clock();
-        document.getElementById('loading').style.display = 'none';
-
         function animate() {
             requestAnimationFrame(animate);
-            const delta = clock.getDelta();
             const elapsed = clock.getElapsedTime();
-            
             mat.uniforms.uTime.value = elapsed;
-            mat.uniforms.uMorph.value = THREE.MathUtils.lerp(mat.uniforms.uMorph.value, morphState, 0.03);
             
-            // 文字淡入淡出
-            prizePlane.material.opacity = THREE.MathUtils.smoothstep(mat.uniforms.uMorph.value, 0.8, 1.0);
-            prizePlane.lookAt(camera.position);
-
-            controls.update();
+            // 平滑形态过渡
+            mat.uniforms.uMorph.value = THREE.MathUtils.lerp(mat.uniforms.uMorph.value, uMorph, 0.1);
+            
+            // 自动旋转
+            points.rotation.y += 0.002;
+            
             composer.render();
         }
+
+        document.getElementById('loading').style.display = 'none';
+        animate();
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -213,8 +193,6 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             composer.setSize(window.innerWidth, window.innerHeight);
         });
-
-        animate();
     </script>
 </body>
 </html>
