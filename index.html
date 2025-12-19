@@ -3,30 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cyber Luck Draw</title>
+<title>The Winter Gift | Luxury Edition</title>
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Noto+Sans+SC:wght@500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Noto+Sans+SC:wght@300&display=swap');
 
-    body { margin: 0; overflow: hidden; background-color: #020205; font-family: 'Noto Sans SC', sans-serif; }
+    body { margin: 0; overflow: hidden; background-color: #000000; font-family: 'Noto Sans SC', sans-serif; }
     
     #ui-layer {
         position: absolute; top: 0; left: 0; width: 100%; height: 100%;
         pointer-events: none; z-index: 10;
         display: flex; flex-direction: column; justify-content: center; align-items: center;
-        background: radial-gradient(circle, transparent 30%, #000 100%);
+        background: radial-gradient(circle, transparent 40%, rgba(0,0,0,0.9) 100%);
     }
 
+    /* 文字更纤细，更高雅 */
     h1 {
-        font-family: 'Cinzel', serif; color: #DAA520; 
-        font-size: 24px; letter-spacing: 6px; text-transform: uppercase;
-        margin-top: -150px; text-align: center;
-        text-shadow: 0 0 20px rgba(218, 165, 32, 0.8);
-        animation: float 3s ease-in-out infinite;
+        font-family: 'Cinzel', serif; color: #F0E68C; 
+        font-size: 20px; letter-spacing: 8px; text-transform: uppercase; font-weight: 400;
+        margin-top: -100px; text-align: center; opacity: 0.8;
+        text-shadow: 0 0 15px rgba(240, 230, 140, 0.3);
+    }
+    
+    .btn-hint {
+        color: rgba(255,255,255,0.3); font-size: 10px; letter-spacing: 4px; margin-top: 15px;
+        border: 1px solid rgba(255,255,255,0.1); padding: 8px 20px; border-radius: 20px;
+        background: rgba(0,0,0,0.5); backdrop-filter: blur(2px);
     }
 
-    p { color: rgba(255,255,255,0.5); font-size: 12px; letter-spacing: 4px; margin-top: 10px; }
-    
-    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
 </style>
 <script src="https://lib.baomitu.com/three.js/r128/three.min.js"></script>
 <script src="https://lib.baomitu.com/tween.js/18.6.4/tween.umd.js"></script>
@@ -35,236 +38,196 @@
 
 <div id="ui-layer">
     <div>
-        <h1>The Lucky Gift</h1>
-        <p>TAP TO DRAW</p>
+        <h1>The Winter Gift</h1>
+        <div class="btn-hint">TAP TO OPEN</div>
     </div>
 </div>
 
 <div id="canvas-container"></div>
 
 <script>
-    // --- 1. 策划配置区 (在此处修改奖品) ---
-    const PRIZES = [
-        "请你吃大餐", 
-        "清空购物车", 
-        "专属奶茶一杯", 
-        "答应一个要求", 
-        "现金红包 520", 
-        "看一场电影",
-        "按摩券一张",
-        "做一天家务"
-    ];
-    
-    // 【作弊模式】
-    // 如果设为 null，则完全随机。
-    // 如果设为 "清空购物车"，则无论怎么抽，最后都会停在这个词上。
-    const CHEAT_CODE = null; 
+    // --- 1. 高奢审美配置 (Aesthetics) ---
+    const CONFIG = {
+        count: 25000, // 粒子量大，但单体极小
+        colors: {
+            red: new THREE.Color(0x8B0000),      // 深红 (Dark Red) - 礼物盒
+            gold: new THREE.Color(0xFFFACD),     // 柠檬绸金 (Lemon Chiffon) - 亮部
+            green: new THREE.Color(0x002211),    // 极深绿 (Dark Emerald) - 树主体
+            cyan: new THREE.Color(0x004433)      // 青绿 (Teal) - 树层次
+        }
+    };
 
-    // --- 2. 核心场景 ---
-    const CONFIG = { count: 18000 };
+    // --- 2. 场景 ---
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x020205, 0.03);
+    scene.fog = new THREE.FogExp2(0x000000, 0.04); // 更重的黑色雾气，增加深邃感
 
     const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(0, 0, 9);
+    camera.position.set(0, 0, 7.5);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false }); // 关闭透明背景，强制纯黑，防止泛白
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     document.body.appendChild(renderer.domElement);
 
-    // --- 3. 全息文字系统 (Holographic Text) ---
-    // 使用 Canvas 绘制文字贴图，避免加载中文字体文件导致的黑屏
-    function createTextTexture(text, isHighlight = false) {
+    // --- 3. 核心：微粒光点纹理 (Micro-Sparkle) ---
+    function createSparkleTexture() {
         const canvas = document.createElement('canvas');
-        canvas.width = 512; canvas.height = 256;
+        canvas.width = 64; canvas.height = 64;
         const ctx = canvas.getContext('2d');
+        
+        // 核心改动：不再画大光晕，而是画锐利的星点
+        const grad = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+        grad.addColorStop(0, 'rgba(255, 255, 255, 1)');     // 极亮核心
+        grad.addColorStop(0.15, 'rgba(255, 255, 255, 0.3)'); // 快速衰减
+        grad.addColorStop(0.5, 'rgba(0, 0, 0, 0)');          // 边缘完全透明
+        
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 64, 64);
+        return new THREE.CanvasTexture(canvas);
+    }
 
-        // 发光背景
-        if (isHighlight) {
-            const grad = ctx.createRadialGradient(256, 128, 0, 256, 128, 120);
-            grad.addColorStop(0, 'rgba(218, 165, 32, 0.4)');
-            grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, 512, 256);
+    // --- 4. 抽奖文字 (全息板) ---
+    const PRIZES = ["请你吃大餐", "清空购物车", "专属奶茶一杯", "答应一个要求", "现金红包 520", "看一场电影"];
+    const CHEAT_CODE = null; // 设置作弊词，如 "清空购物车"
+
+    function createTextTexture(text, isHighlight) {
+        const cvs = document.createElement('canvas'); cvs.width=512; cvs.height=256;
+        const ctx = cvs.getContext('2d');
+        if(isHighlight) {
+            const g = ctx.createRadialGradient(256,128,0,256,128,150);
+            g.addColorStop(0,'rgba(255,250,205,0.2)'); g.addColorStop(1,'rgba(0,0,0,0)');
+            ctx.fillStyle=g; ctx.fillRect(0,0,512,256);
         }
-
-        // 文字样式
-        ctx.font = "bold 60px 'Microsoft YaHei', sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        
-        // 阴影模拟霓虹光
-        ctx.shadowColor = isHighlight ? "#FFD700" : "#00FFFF";
-        ctx.shadowBlur = isHighlight ? 30 : 15;
-        ctx.fillStyle = isHighlight ? "#FFFFFF" : "#E0FFFF";
-        
+        ctx.font = "bold 50px 'Noto Sans SC', sans-serif";
+        ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.shadowBlur=isHighlight?20:10; ctx.shadowColor=isHighlight?"#FFFACD":"#AFEEEE";
+        ctx.fillStyle=isHighlight?"#FFFFFF":"#E0FFFF";
         ctx.fillText(text, 256, 128);
-        
-        const tex = new THREE.CanvasTexture(canvas);
-        tex.needsUpdate = true;
-        return tex;
+        const t=new THREE.CanvasTexture(cvs); t.needsUpdate=true; return t;
     }
+    const textMat = new THREE.MeshBasicMaterial({ map: createTextTexture(""), transparent:true, opacity:0, blending:THREE.AdditiveBlending, depthTest:false });
+    const textMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.5,1.25), textMat);
+    textMesh.position.set(0,0.2,0); scene.add(textMesh);
 
-    // 创建文字板
-    const textGeo = new THREE.PlaneGeometry(3, 1.5);
-    const textMat = new THREE.MeshBasicMaterial({ 
-        map: createTextTexture("准备抽奖"), 
-        transparent: true, 
-        opacity: 0, // 初始隐藏
-        blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide,
-        depthTest: false
-    });
-    const textMesh = new THREE.Mesh(textGeo, textMat);
-    textMesh.position.set(0, 0.5, 0);
-    scene.add(textMesh);
 
-    // --- 4. 粒子系统 (V12 基础升级) ---
-    function createGlowTexture() {
-        const c = document.createElement('canvas'); c.width=32; c.height=32;
-        const ctx = c.getContext('2d');
-        const g = ctx.createRadialGradient(16,16,0,16,16,16);
-        g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(0.5,'rgba(255,255,255,0.2)'); g.addColorStop(1,'rgba(0,0,0,0)');
-        ctx.fillStyle=g; ctx.fillRect(0,0,32,32);
-        return new THREE.CanvasTexture(c);
-    }
-
+    // --- 5. 粒子系统 (重写排布逻辑) ---
     const geo = new THREE.BufferGeometry();
-    const pos = [], col = [], sizes = [], randoms = [];
-    const tGift = [], tTree = [], cGift = [], cTree = [];
-    
-    const colorRed = new THREE.Color(0xD10056);
-    const colorGold = new THREE.Color(0xFFD700);
-    const colorGreen = new THREE.Color(0x004422);
+    const pos=[], col=[], sizes=[], randoms=[];
+    const tGift=[], tTree=[], cGift=[], cTree=[];
 
     for(let i=0; i<CONFIG.count; i++) {
         randoms.push(Math.random());
-        // Gift
-        let gx = (Math.random()-0.5)*3, gy = (Math.random()-0.5)*3, gz = (Math.random()-0.5)*3;
-        let isRibbon = Math.abs(gx)<0.3 || Math.abs(gy)<0.3;
-        if(isRibbon) { gx*=1.05; gy*=1.05; gz*=1.05; }
-        tGift.push(gx, gy, gz);
-        let c = isRibbon ? colorGold : colorRed;
-        cGift.push(c.r, c.g, c.b);
 
-        // Tree
-        let angle = i*0.15;
-        let h = (i/CONFIG.count)*7 - 3.5;
-        let r = (3.5-h)*0.45;
-        let tx = Math.cos(angle)*r, ty=h, tz=Math.sin(angle)*r;
-        // 环绕光环
-        if(i%15===0) {
-             let r2 = r*1.5; 
-             tx = Math.cos(angle*2)*r2; tz=Math.sin(angle*2)*r2;
-        } else {
-             tx += (Math.random()-0.5)*0.3;
-             ty += (Math.random()-0.5)*0.3;
-             tz += (Math.random()-0.5)*0.3;
+        // --- 礼物盒 (Cube) ---
+        // 改动：让礼物盒看起来更像是一个“能量块”，而不是空心盒子
+        let gx = (Math.random()-0.5)*2.5;
+        let gy = (Math.random()-0.5)*2.5;
+        let gz = (Math.random()-0.5)*2.5;
+        
+        // 边缘更密集 (勾勒轮廓)
+        if(Math.random()>0.5) {
+            let axis = Math.floor(Math.random()*3);
+            if(axis===0) gx = Math.sign(gx)*1.25;
+            if(axis===1) gy = Math.sign(gy)*1.25;
+            if(axis===2) gz = Math.sign(gz)*1.25;
         }
-        tTree.push(tx, ty, tz);
-        let ct = (i%15===0) ? colorGold : colorGreen;
-        cTree.push(ct.r, ct.g, ct.b);
 
-        // Init
+        tGift.push(gx, gy, gz);
+        // 礼物颜色：深红 + 少量金色火花
+        let cG = (Math.random()>0.9) ? CONFIG.colors.gold : CONFIG.colors.red;
+        cGift.push(cG.r, cG.g, cG.b);
+
+
+        // --- 圣诞树 (Ethereal Tree) ---
+        // 核心改动：不仅在表面，内部也要填充粒子，制造“体积雾”感
+        let angle = i * 0.15;
+        let h = (i/CONFIG.count)*7 - 3.5; // 高度
+        let rBase = (3.5 - h) * 0.45;     // 锥体半径
+        
+        let r = rBase * Math.sqrt(Math.random()); // 随机分布在圆内，而不是圆周上
+        let tx = Math.cos(angle)*r;
+        let ty = h;
+        let tz = Math.sin(angle)*r;
+
+        // 颜色逻辑：
+        // 内部深绿，外部浅绿，夹杂金粉
+        let distRatio = r / rBase; // 0=中心, 1=边缘
+        let cT = CONFIG.colors.green.clone().lerp(CONFIG.colors.cyan, distRatio * 0.5);
+        
+        let size = Math.random()*0.08 + 0.02; // 默认极小
+
+        // --- 金色流沙 (替代原本生硬的螺旋) ---
+        // 只有 5% 的粒子构成流光，若隐若现
+        if (i % 20 === 0) {
+            let rSpiral = rBase * 1.05; // 紧贴表面浮动
+            let spiralAngle = angle * 2 + h; // 动态螺旋
+            tx = Math.cos(spiralAngle) * rSpiral;
+            tz = Math.sin(spiralAngle) * rSpiral;
+            cT = CONFIG.colors.gold;
+            size = Math.random()*0.15 + 0.05; // 流光稍大
+        }
+        // 树顶之星
+        if(h > 3.2) { 
+            tx*=0.1; tz*=0.1; cT = CONFIG.colors.gold; size = 0.2; 
+        }
+
+        tTree.push(tx, ty, tz);
+        cTree.push(cT.r, cT.g, cT.b);
+
+        // 初始化
         pos.push(gx, gy, gz);
-        col.push(c.r, c.g, c.b);
-        sizes.push(Math.random()*0.15 + 0.05);
+        col.push(cG.r, cG.g, cG.b);
+        sizes.push(size);
     }
 
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
     geo.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
 
+    // --- 材质 (关键修正：降低曝光) ---
     const mat = new THREE.PointsMaterial({
-        vertexColors: true, map: createGlowTexture(), blending: THREE.AdditiveBlending,
-        depthWrite: false, transparent: true, opacity: 0.8, sizeAttenuation: true
+        vertexColors: true,
+        map: createSparkleTexture(),
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.4, // 【关键】大幅降低透明度，防止重叠变白！
+        sizeAttenuation: true
     });
     const particles = new THREE.Points(geo, mat);
     scene.add(particles);
 
-    // --- 5. 抽奖逻辑核心 ---
-    let state = 'gift'; // gift, spinning, result
+    // --- 6. 动画逻辑 ---
+    let state = 'gift';
     let morph = 0;
-    
-    // 轮盘动画变量
-    let spinInterval;
-    let spinSpeed = 50; 
-
-    function startLottery() {
-        if(state !== 'gift') return;
-        state = 'spinning';
-        
-        // 1. 隐藏UI，开始变形
-        document.querySelector('#ui-layer h1').style.opacity = 0;
-        document.querySelector('#ui-layer p').style.opacity = 0;
-        
-        new TWEEN.Tween({val: 0}).to({val: 1}, 2000).easing(TWEEN.Easing.Cubic.InOut)
-            .onUpdate(obj => morph = obj.val).start();
-
-        // 2. 文字浮现并开始滚动
-        textMat.opacity = 1;
-        let idx = 0;
-        
-        // 快速滚动音效感 (视觉)
-        spinInterval = setInterval(() => {
-            textMat.map = createTextTexture(PRIZES[idx % PRIZES.length]);
-            idx++;
-        }, 80);
-
-        // 3. 3秒后出结果
-        setTimeout(stopLottery, 3500);
-    }
-
-    function stopLottery() {
-        clearInterval(spinInterval);
-        
-        // 决定结果
-        let finalText = CHEAT_CODE ? CHEAT_CODE : PRIZES[Math.floor(Math.random() * PRIZES.length)];
-        
-        // 视觉冲击：高亮显示结果
-        textMat.map = createTextTexture(finalText, true);
-        
-        // 冲击波特效 (Shockwave)
-        const shockGeo = new THREE.RingGeometry(0.1, 0.2, 32);
-        const shockMat = new THREE.MeshBasicMaterial({ color: 0xFFD700, transparent: true, opacity: 0.8, side: THREE.DoubleSide });
-        const shockwave = new THREE.Mesh(shockGeo, shockMat);
-        shockwave.rotation.x = -Math.PI / 2;
-        scene.add(shockwave);
-        
-        new TWEEN.Tween(shockwave.scale).to({x: 30, y: 30}, 1000).start();
-        new TWEEN.Tween(shockwave.material).to({opacity: 0}, 1000).onComplete(()=>scene.remove(shockwave)).start();
-
-        // 粒子爆发一下
-        state = 'result';
-    }
-
-    // --- 6. 动画循环 ---
     let time = 0;
+    let spinTimer = null;
+
     function animate() {
         requestAnimationFrame(animate);
         TWEEN.update();
-        time += 0.015;
+        time += 0.01;
 
-        // 粒子更新
         const p = geo.attributes.position.array;
         const c = geo.attributes.color.array;
 
+        // 粒子变形插值
         for(let i=0; i<CONFIG.count; i++) {
             const ix=i*3, iy=i*3+1, iz=i*3+2;
             
-            // 混合坐标
+            // 基础位置
             const px = tGift[ix]*(1-morph) + tTree[ix]*morph;
             const py = tGift[iy]*(1-morph) + tTree[iy]*morph;
             const pz = tGift[iz]*(1-morph) + tTree[iz]*morph;
             
-            // 呼吸抖动
-            const breathe = Math.sin(time + randoms[i]*10) * (0.01 + morph*0.02);
-            p[ix] = px + Math.cos(time+randoms[i])*0.01;
-            p[iy] = py + breathe;
-            p[iz] = pz + Math.sin(time+randoms[i])*0.01;
+            // 动态湍流 (Turbulence) - 让粒子像烟雾一样飘动
+            const noise = Math.sin(time + py*0.5 + randoms[i]*10) * 0.05;
+            
+            p[ix] = px + Math.cos(time + randoms[i])*0.02 + noise;
+            p[iy] = py + Math.sin(time*0.5 + randoms[i])*0.02;
+            p[iz] = pz + Math.sin(time + randoms[i])*0.02 + noise;
 
-            // 混合颜色
+            // 颜色插值
             c[ix] = cGift[ix]*(1-morph) + cTree[ix]*morph;
             c[iy] = cGift[iy]*(1-morph) + cTree[iy]*morph;
             c[iz] = cGift[iz]*(1-morph) + cTree[iz]*morph;
@@ -272,21 +235,54 @@
         geo.attributes.position.needsUpdate = true;
         geo.attributes.color.needsUpdate = true;
 
-        particles.rotation.y = time * 0.1;
+        particles.rotation.y = time * 0.08;
         
-        // 文字板总是面向摄像机，并微微浮动
+        // 文字浮动
         textMesh.lookAt(camera.position);
-        textMesh.position.y = 0.5 + Math.sin(time*2)*0.1;
-
         renderer.render(scene, camera);
     }
     animate();
 
-    // 交互
-    window.addEventListener('mousedown', startLottery);
-    window.addEventListener('touchstart', (e) => { e.preventDefault(); startLottery(); }, {passive: false});
+    // --- 7. 交互流程 ---
+    function start() {
+        if(state !== 'gift') return;
+        state = 'spinning';
+        
+        // UI 消失
+        const ui = document.querySelector('#ui-layer');
+        ui.style.opacity = 0;
+        setTimeout(()=>ui.style.display='none', 1000);
+
+        // 变形动画
+        new TWEEN.Tween({v:0}).to({v:1}, 2500).easing(TWEEN.Easing.Cubic.InOut)
+            .onUpdate(o => morph=o.v).start();
+
+        // 抽奖逻辑
+        textMat.opacity = 1;
+        let idx = 0;
+        spinTimer = setInterval(() => {
+            textMat.map = createTextTexture(PRIZES[idx % PRIZES.length], false);
+            idx++;
+        }, 100);
+
+        // 3.5秒后出结果
+        setTimeout(() => {
+            clearInterval(spinTimer);
+            const res = CHEAT_CODE || PRIZES[Math.floor(Math.random()*PRIZES.length)];
+            textMat.map = createTextTexture(res, true);
+            
+            // 结果高亮冲击
+            new TWEEN.Tween(textMesh.scale).from({x:0.1,y:0.1}).to({x:1,y:1}, 800).easing(TWEEN.Easing.Elastic.Out).start();
+            
+            // 粒子爆发扩散一下 (Shockwave visual)
+            state = 'done';
+        }, 3500);
+    }
+
+    window.addEventListener('mousedown', start);
+    window.addEventListener('touchstart', (e)=>{e.preventDefault(); start();}, {passive:false});
     window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+        camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 </script>
