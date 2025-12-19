@@ -3,356 +3,619 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>圣诞魔法：手势控制</title>
+    <title>Particle Elegance: 手势控制</title>
     <style>
-        * { margin: 0; padding: 0; }
-        body { 
-            background: #000;
-            overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+            -webkit-tap-highlight-color: transparent;
         }
         
-        #container {
+        body {
+            background: #000;
+            color: #fff;
+            font-family: 'Helvetica Neue', 'SF Pro Display', -apple-system, sans-serif;
+            overflow: hidden;
             position: fixed;
             width: 100vw;
             height: 100vh;
-            background: radial-gradient(circle at 50% 50%, #0a0a1a 0%, #000 100%);
+            touch-action: none;
+            -webkit-font-smoothing: antialiased;
         }
-        
-        #ui {
-            position: fixed;
-            top: 40px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: #fff;
-            text-align: center;
-            font-size: 16px;
-            z-index: 100;
-            padding: 12px 24px;
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(8px);
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            letter-spacing: 1px;
+
+        #mainCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
             opacity: 1;
-            transition: opacity 2s;
         }
-        
-        #gesture-indicator {
-            position: fixed;
-            bottom: 40px;
+
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .title-container {
+            position: absolute;
+            top: 3.5rem;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: 400;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            opacity: 0.95;
+            animation: fadeIn 1.2s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 0.95; transform: translateY(0); }
+        }
+
+        .hand-gesture-indicator {
+            position: absolute;
+            bottom: 5.5rem;
             left: 50%;
             transform: translateX(-50%);
-            color: #fff;
-            font-size: 14px;
-            padding: 10px 20px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 12px;
-            z-index: 100;
             display: flex;
             align-items: center;
-            gap: 8px;
+            flex-direction: column;
+            gap: 1.2rem;
         }
-        
-        .gesture-icon {
-            font-size: 20px;
+
+        .hand-icon {
+            font-size: 3.5rem;
+            width: 4rem;
+            height: 4rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            filter: drop-shadow(0 4px 12px rgba(255, 255, 255, 0.15));
         }
-        
-        #loading {
-            position: fixed;
-            top: 50%;
+
+        .gesture-text {
+            font-size: 1rem;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            opacity: 0.9;
+            white-space: nowrap;
+            transition: opacity 0.3s ease;
+        }
+
+        .transformation-line {
+            position: absolute;
+            bottom: 9rem;
             left: 50%;
-            transform: translate(-50%, -50%);
-            color: #fff;
-            z-index: 1000;
+            transform: translateX(-50%);
+            width: 160px;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.2);
+            overflow: hidden;
         }
-        
-        #video-input {
-            display: none;
+
+        .transformation-progress {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, 
+                rgba(220, 50, 70, 0.9) 0%, 
+                rgba(255, 200, 50, 0.9) 50%, 
+                rgba(80, 220, 150, 0.9) 100%);
+            transition: width 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .transformation-dots {
+            position: absolute;
+            bottom: 8.8rem;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 160px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .transformation-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .transformation-dot.active {
+            background: rgba(255, 255, 255, 0.95);
+            transform: scale(1.3);
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+        }
+
+        .logo {
+            position: absolute;
+            bottom: 2rem;
+            left: 2rem;
+            font-size: 0.9rem;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            opacity: 0.5;
+            transition: opacity 0.3s ease;
+        }
+
+        .instruction {
+            position: absolute;
+            bottom: 2rem;
+            right: 2rem;
+            font-size: 0.9rem;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            opacity: 0.5;
+            text-align: right;
+        }
+
+        .permission-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            opacity: 1;
+            transition: opacity 0.5s ease;
+        }
+
+        .permission-content {
+            text-align: center;
+            padding: 3rem;
+            max-width: 500px;
+        }
+
+        .permission-title {
+            font-size: 1.4rem;
+            margin-bottom: 1.5rem;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+        }
+
+        .permission-description {
+            font-size: 1rem;
+            line-height: 1.6;
+            opacity: 0.8;
+            margin-bottom: 2.5rem;
+            font-weight: 300;
+        }
+
+        .permission-button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 1rem 2.5rem;
+            font-size: 1rem;
+            border-radius: 2rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 300;
+            letter-spacing: 0.1em;
+            backdrop-filter: blur(10px);
+        }
+
+        .permission-button:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        .permission-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        @media (max-width: 768px) {
+            .title-container { top: 2.5rem; font-size: 0.9rem; }
+            .hand-gesture-indicator { bottom: 4.5rem; }
+            .hand-icon { font-size: 2.8rem; }
+            .gesture-text { font-size: 0.9rem; }
         }
     </style>
 </head>
 <body>
-    <div id="ui">握拳 🎁 礼物 · 张手 🎄 圣诞树</div>
-    <div id="gesture-indicator">
-        <span class="gesture-icon">👋</span>
-        <span>等待手势检测</span>
+    <canvas id="mainCanvas"></canvas>
+    
+    <div id="ui">
+        <div class="title-container">Gesture Particle Transformation</div>
+        
+        <div class="hand-gesture-indicator">
+            <div class="hand-icon">✊</div>
+            <div class="gesture-text">握拳 - 礼物形态</div>
+        </div>
+        
+        <div class="transformation-dots">
+            <div class="transformation-dot active"></div>
+            <div class="transformation-dot"></div>
+        </div>
+        
+        <div class="transformation-line">
+            <div class="transformation-progress" id="progressFill"></div>
+        </div>
+        
+        <div class="logo">PARTICLE ELEGANCE</div>
+        <div class="instruction">请将手置于摄像头前</div>
     </div>
-    <div id="loading">正在加载...</div>
-    <video id="video-input" playsinline></video>
-    <div id="container"></div>
+    
+    <div class="permission-overlay" id="permissionOverlay">
+        <div class="permission-content">
+            <div class="permission-title">手势控制体验</div>
+            <div class="permission-description">
+                这是一个通过手势控制的粒子变换体验。<br>
+                请允许摄像头访问权限，将您的手置于摄像头前，<br>
+                通过握拳和张手来控制粒子在礼物与圣诞树形态间变换。
+            </div>
+            <button class="permission-button" id="startButton">开始体验</button>
+        </div>
+    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <video id="videoInput" autoplay playsinline style="display: none;"></video>
+
+    <!-- 使用特定版本的 Three.js，确保稳定性 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js"></script>
 
     <script>
+        // 配置参数
+        const CONFIG = {
+            particleCount: 18000,
+            particleSize: 0.08,
+            animationSpeed: 0.08,
+            rotationSpeed: 0.002,
+            handSmoothing: 0.15,
+            maxRotationAngle: Math.PI * 0.02,
+            colors: {
+                giftPrimary: new THREE.Color(0xC40C2C),   // 优雅的深红色
+                giftAccent: new THREE.Color(0xD4AF37),    // 金色
+                treePrimary: new THREE.Color(0x2D5A27),   // 深森林绿
+                treeSecondary: new THREE.Color(0x3A8C3A), // 中绿色
+                treeAccent: new THREE.Color(0xFFD700),    // 亮金色
+                ornament1: new THREE.Color(0xC40C2C),     // 装饰球红
+                ornament2: new THREE.Color(0x1E90FF),     // 装饰球蓝
+                ornament3: new THREE.Color(0xFFD700),     // 装饰球金
+                star: new THREE.Color(0xFFEEAA)           // 星星
+            }
+        };
+
+        // 全局变量
         let scene, camera, renderer;
         let particles, particleGeometry, particleMaterial;
         let currentMorph = 0, targetMorph = 0;
-        let isHandDetected = false;
+        let handDetected = false;
+        let lastHandTime = 0;
+        let hands = null;
+        let animationFrameId = null;
+        let lastUpdateTime = 0;
 
-        // 初始化Three.js场景
-        function initScene() {
-            // 创建场景
-            scene = new THREE.Scene();
-            
-            // 创建相机
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 0, 12);
-            
-            // 创建渲染器
-            renderer = new THREE.WebGLRenderer({ 
-                antialias: true, 
-                alpha: true,
-                preserveDrawingBuffer: true
-            });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-            document.getElementById('container').appendChild(renderer.domElement);
-            
-            // 添加环境光
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-            scene.add(ambientLight);
-            
-            // 添加主光源
-            const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            mainLight.position.set(10, 10, 10);
-            scene.add(mainLight);
-            
-            // 添加轮廓光
-            const rimLight = new THREE.DirectionalLight(0x4a90e2, 0.3);
-            rimLight.position.set(-10, -5, -10);
-            scene.add(rimLight);
-            
-            createParticleSystem();
-            animate();
-        }
-
-        // 创建粒子系统
-        function createParticleSystem() {
-            const particleCount = 15000;
-            
-            // 创建几何体
-            particleGeometry = new THREE.BufferGeometry();
-            
-            // 初始位置（礼物状态）
-            const initialPositions = new Float32Array(particleCount * 3);
-            // 目标位置（圣诞树状态）
-            const targetPositions = new Float32Array(particleCount * 3);
-            // 粒子属性：[类型, 大小, 随机相位]
-            const attributes = new Float32Array(particleCount * 3);
-            
-            for (let i = 0; i < particleCount; i++) {
-                const i3 = i * 3;
-                const type = Math.random();
-                
-                // 粒子类型：0=红色礼物，1=金色丝带，2=绿色树叶，3=装饰球
-                let particleType = 0;
-                if (type < 0.1) particleType = 1;      // 10% 金色丝带
-                else if (type < 0.25) particleType = 3; // 15% 装饰球
-                else if (type < 0.7) particleType = 2;  // 45% 绿色树叶
-                // 其余 30% 为红色礼物
-                
-                // --- 礼物位置（立方体）---
-                const giftSize = 4;
-                const face = Math.floor(Math.random() * 6);
-                const u = (Math.random() - 0.5) * 2;
-                const v = (Math.random() - 0.5) * 2;
-                
-                switch(face) {
-                    case 0: // 右面
-                        initialPositions[i3] = giftSize;
-                        initialPositions[i3+1] = u;
-                        initialPositions[i3+2] = v;
-                        break;
-                    case 1: // 左面
-                        initialPositions[i3] = -giftSize;
-                        initialPositions[i3+1] = u;
-                        initialPositions[i3+2] = v;
-                        break;
-                    case 2: // 上面
-                        initialPositions[i3] = u;
-                        initialPositions[i3+1] = giftSize;
-                        initialPositions[i3+2] = v;
-                        break;
-                    case 3: // 下面
-                        initialPositions[i3] = u;
-                        initialPositions[i3+1] = -giftSize;
-                        initialPositions[i3+2] = v;
-                        break;
-                    case 4: // 前面
-                        initialPositions[i3] = u;
-                        initialPositions[i3+1] = v;
-                        initialPositions[i3+2] = giftSize;
-                        break;
-                    case 5: // 后面
-                        initialPositions[i3] = u;
-                        initialPositions[i3+1] = v;
-                        initialPositions[i3+2] = -giftSize;
-                        break;
-                }
-                
-                // --- 圣诞树位置（锥形螺旋）---
-                const t = i / particleCount;
-                const height = t * 12 - 4;
-                const radius = (1 - t * 0.8) * 5;
-                const angle = Math.PI * 6 * t;
-                
-                targetPositions[i3] = Math.cos(angle) * radius * (0.8 + Math.random() * 0.4);
-                targetPositions[i3+1] = height;
-                targetPositions[i3+2] = Math.sin(angle) * radius * (0.8 + Math.random() * 0.4);
-                
-                // 如果是装饰球，往外偏移一些
-                if (particleType === 3) {
-                    targetPositions[i3] *= 1.3;
-                    targetPositions[i3+2] *= 1.3;
-                }
-                
-                // 如果是星星（顶部）
-                if (i < 200) { // 顶部200个粒子组成星星
-                    particleType = 1;
-                    const starRadius = 2 * Math.sin(t * Math.PI * 5);
-                    targetPositions[i3] = Math.cos(angle * 5) * starRadius;
-                    targetPositions[i3+1] = 8;
-                    targetPositions[i3+2] = Math.sin(angle * 5) * starRadius;
-                }
-                
-                attributes[i3] = particleType;               // 类型
-                attributes[i3+1] = 0.8 + Math.random() * 0.4; // 大小
-                attributes[i3+2] = Math.random() * Math.PI * 2; // 相位
+        // 初始化
+        class ParticleTransformation {
+            constructor() {
+                this.initializeScene();
+                this.initializeParticles();
+                this.initializeEventListeners();
+                this.animate(0);
             }
-            
-            // 设置几何体属性
-            particleGeometry.setAttribute('position', new THREE.BufferAttribute(initialPositions, 3));
-            particleGeometry.setAttribute('targetPosition', new THREE.BufferAttribute(targetPositions, 3));
-            particleGeometry.setAttribute('attributes', new THREE.BufferAttribute(attributes, 3));
-            
-            // 创建粒子材质
-            particleMaterial = new THREE.ShaderMaterial({
-                uniforms: {
-                    time: { value: 0 },
-                    morph: { value: 0 }
-                },
-                vertexShader: `
-                    uniform float time;
-                    uniform float morph;
-                    
-                    attribute vec3 targetPosition;
-                    attribute vec3 attributes;
-                    
-                    varying vec3 vColor;
-                    varying float vAlpha;
-                    
-                    void main() {
-                        float type = attributes.x;
-                        float size = attributes.y;
-                        float phase = attributes.z;
-                        
-                        // 平滑插值
-                        float t = morph;
-                        t = t * t * (3.0 - 2.0 * t); // 平滑缓动
-                        vec3 pos = mix(position, targetPosition, t);
-                        
-                        // 轻微浮动效果
-                        float floatAmount = sin(time * 1.5 + phase) * 0.05;
-                        pos.y += floatAmount * (1.0 - t * 0.5);
-                        
-                        // 缓慢旋转（礼物状态下更明显）
-                        float rotation = time * 0.3 * (1.0 - t);
-                        float c = cos(rotation);
-                        float s = sin(rotation);
-                        pos.xz = mat2(c, -s, s, c) * pos.xz;
-                        
-                        // 设置颜色
-                        if (t < 0.5) {
-                            // 礼物颜色
-                            if (type > 0.9) {
-                                vColor = vec3(1.0, 0.85, 0.3); // 金色
-                            } else {
-                                vColor = vec3(0.95, 0.2, 0.2); // 红色
-                            }
-                        } else {
-                            // 圣诞树颜色
-                            if (type > 0.9) {
-                                vColor = vec3(1.0, 0.9, 0.4); // 星星/装饰
-                            } else if (type > 0.8) {
-                                // 多彩装饰球
-                                float hue = phase / 6.28;
-                                vColor = 0.6 + 0.4 * cos(vec3(0.0, 2.094, 4.188) + hue * 6.28);
-                            } else {
-                                // 树叶颜色渐变
-                                float green = 0.3 + 0.7 * (pos.y + 4.0) / 12.0;
-                                vColor = mix(vec3(0.1, 0.5, 0.2), vec3(0.4, 0.9, 0.5), green);
-                            }
-                        }
-                        
-                        vAlpha = 0.9 + 0.1 * sin(time + phase);
-                        
-                        vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-                        gl_Position = projectionMatrix * mvPosition;
-                        
-                        // 粒子大小
-                        float baseSize = 6.0;
-                        if (type > 0.9) baseSize = 8.0; // 星星/丝带
-                        if (type > 0.8) baseSize = 10.0; // 装饰球
-                        
-                        gl_PointSize = baseSize * size * (300.0 / -mvPosition.z);
-                    }
-                `,
-                fragmentShader: `
-                    varying vec3 vColor;
-                    varying float vAlpha;
-                    
-                    void main() {
-                        vec2 uv = gl_PointCoord - vec2(0.5);
-                        float dist = length(uv);
-                        
-                        if (dist > 0.5) discard;
-                        
-                        // 圆形粒子，边缘柔和
-                        float alpha = 1.0 - smoothstep(0.4, 0.5, dist);
-                        
-                        // 内发光
-                        float innerGlow = 1.0 - dist * 1.8;
-                        innerGlow = pow(innerGlow, 2.0);
-                        
-                        gl_FragColor = vec4(vColor, alpha * innerGlow * vAlpha);
-                    }
-                `,
-                transparent: true,
-                depthWrite: false,
-                blending: THREE.NormalBlending
-            });
-            
-            // 创建粒子系统
-            particles = new THREE.Points(particleGeometry, particleMaterial);
-            scene.add(particles);
-        }
 
-        // 初始化手势识别
-        async function initHandTracking() {
-            const video = document.getElementById('video-input');
-            
-            const hands = new Hands({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-            });
-            
-            hands.setOptions({
-                maxNumHands: 1,
-                modelComplexity: 0,
-                minDetectionConfidence: 0.6,
-                minTrackingConfidence: 0.6
-            });
-            
-            hands.onResults((results) => {
-                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                    if (!isHandDetected) {
-                        isHandDetected = true;
-                        updateGestureIndicator(true);
+            initializeScene() {
+                // 创建场景
+                scene = new THREE.Scene();
+                
+                // 创建相机
+                const aspect = window.innerWidth / window.innerHeight;
+                camera = new THREE.PerspectiveCamera(50, aspect, 0.1, 1000);
+                camera.position.set(0, 0, 14);
+                camera.lookAt(0, 0, 0);
+                
+                // 创建渲染器
+                renderer = new THREE.WebGLRenderer({
+                    canvas: document.getElementById('mainCanvas'),
+                    antialias: true,
+                    alpha: true,
+                    powerPreference: "high-performance",
+                    precision: "highp"
+                });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                renderer.outputEncoding = THREE.sRGBEncoding;
+                
+                // 添加环境光
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+                scene.add(ambientLight);
+                
+                // 添加主光源
+                const mainLight = new THREE.DirectionalLight(0xffffff, 0.7);
+                mainLight.position.set(8, 10, 8);
+                scene.add(mainLight);
+                
+                // 添加背光
+                const backLight = new THREE.DirectionalLight(0x6688ff, 0.3);
+                backLight.position.set(-5, -3, -8);
+                scene.add(backLight);
+            }
+
+            initializeParticles() {
+                const count = CONFIG.particleCount;
+                const geometry = new THREE.BufferGeometry();
+                
+                // 创建数组
+                const positions = new Float32Array(count * 3);
+                const targetPositions = new Float32Array(count * 3);
+                const colors = new Float32Array(count * 3);
+                const sizes = new Float32Array(count);
+                const phases = new Float32Array(count);
+                const types = new Float32Array(count);
+                
+                for (let i = 0; i < count; i++) {
+                    const i3 = i * 3;
+                    const random = Math.random();
+                    
+                    // 确定粒子类型
+                    let type = 0; // 默认：红色礼物
+                    if (i < 400) {
+                        type = 4; // 星星
+                    } else if (random < 0.15) {
+                        type = 1; // 金色丝带
+                    } else if (random < 0.3) {
+                        type = 2; // 装饰球
+                    } else if (random < 0.8) {
+                        type = 3; // 绿色树叶
                     }
                     
+                    types[i] = type;
+                    phases[i] = Math.random() * Math.PI * 2;
+                    
+                    // 礼物位置（精细的立方体）
+                    const giftSize = 3.8;
+                    const face = Math.floor(Math.random() * 6);
+                    const u = (Math.random() - 0.5) * 2 * giftSize;
+                    const v = (Math.random() - 0.5) * 2 * giftSize;
+                    
+                    switch(face) {
+                        case 0: positions[i3] = giftSize; positions[i3+1] = u; positions[i3+2] = v; break;
+                        case 1: positions[i3] = -giftSize; positions[i3+1] = u; positions[i3+2] = v; break;
+                        case 2: positions[i3] = u; positions[i3+1] = giftSize; positions[i3+2] = v; break;
+                        case 3: positions[i3] = u; positions[i3+1] = -giftSize; positions[i3+2] = v; break;
+                        case 4: positions[i3] = u; positions[i3+1] = v; positions[i3+2] = giftSize; break;
+                        case 5: positions[i3] = u; positions[i3+1] = v; positions[i3+2] = -giftSize; break;
+                    }
+                    
+                    // 圣诞树位置（精致的螺旋结构）
+                    if (type === 4) {
+                        // 星星（顶部）
+                        const starAngle = (i / 400) * Math.PI * 10;
+                        const starRadius = 1.8 * Math.sin(starAngle * 2.5) * 0.5 + 1.2;
+                        targetPositions[i3] = Math.cos(starAngle) * starRadius * 0.8;
+                        targetPositions[i3+1] = 7.5 + Math.sin(starAngle * 5) * 0.2;
+                        targetPositions[i3+2] = Math.sin(starAngle) * starRadius * 0.8;
+                    } else {
+                        const t = (i - 400) / (count - 400);
+                        const height = t * 11 - 3;
+                        const radius = Math.pow(1.1 - t, 1.3) * 4.5;
+                        const angle = Math.PI * 8 * t + (Math.floor(Math.random() * 12) * Math.PI / 6);
+                        const noise = (Math.random() - 0.5) * 0.4;
+                        
+                        targetPositions[i3] = Math.cos(angle) * (radius + noise);
+                        targetPositions[i3+1] = height;
+                        targetPositions[i3+2] = Math.sin(angle) * (radius + noise);
+                        
+                        // 装饰球稍向外
+                        if (type === 2) {
+                            targetPositions[i3] *= 1.25;
+                            targetPositions[i3+2] *= 1.25;
+                        }
+                    }
+                    
+                    // 设置颜色
+                    const color = new THREE.Color();
+                    switch(type) {
+                        case 0: color.copy(CONFIG.colors.giftPrimary); break;
+                        case 1: color.copy(CONFIG.colors.giftAccent); break;
+                        case 2: 
+                            const ornamentType = i % 3;
+                            if (ornamentType === 0) color.copy(CONFIG.colors.ornament1);
+                            else if (ornamentType === 1) color.copy(CONFIG.colors.ornament2);
+                            else color.copy(CONFIG.colors.ornament3);
+                            break;
+                        case 3: 
+                            const greenMix = (targetPositions[i3+1] + 3) / 11;
+                            color.copy(CONFIG.colors.treePrimary).lerp(CONFIG.colors.treeSecondary, greenMix);
+                            break;
+                        case 4: color.copy(CONFIG.colors.star); break;
+                    }
+                    
+                    colors[i3] = color.r;
+                    colors[i3+1] = color.g;
+                    colors[i3+2] = color.b;
+                    
+                    // 设置大小
+                    sizes[i] = CONFIG.particleSize * (0.8 + Math.random() * 0.4);
+                    if (type === 1 || type === 4) sizes[i] *= 1.3; // 金色和星星更大
+                    if (type === 2) sizes[i] *= 1.5; // 装饰球最大
+                }
+                
+                // 设置几何体属性
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute('targetPosition', new THREE.BufferAttribute(targetPositions, 3));
+                geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+                geometry.setAttribute('phase', new THREE.BufferAttribute(phases, 1));
+                
+                // 创建材质
+                particleMaterial = new THREE.ShaderMaterial({
+                    uniforms: {
+                        time: { value: 0 },
+                        morph: { value: 0 },
+                        aspect: { value: window.innerWidth / window.innerHeight }
+                    },
+                    vertexShader: `
+                        uniform float time;
+                        uniform float morph;
+                        uniform float aspect;
+                        
+                        attribute vec3 targetPosition;
+                        attribute float size;
+                        attribute float phase;
+                        
+                        varying vec3 vColor;
+                        varying float vAlpha;
+                        
+                        void main() {
+                            // 平滑插值
+                            float t = morph;
+                            t = t * t * (3.0 - 2.0 * t); // 三次缓动
+                            
+                            // 位置插值
+                            vec3 pos = mix(position, targetPosition, t);
+                            
+                            // 微妙的浮动动画
+                            float floatOffset = sin(time * 1.2 + phase) * 0.06;
+                            pos.y += floatOffset * (1.0 - t * 0.3);
+                            
+                            // 礼物状态下的旋转
+                            float rotation = time * 0.4 * (1.0 - t);
+                            float c = cos(rotation);
+                            float s = sin(rotation);
+                            pos.xz = mat2(c, -s, s, c) * pos.xz;
+                            
+                            // 传递颜色
+                            vColor = color;
+                            
+                            // 计算透明度
+                            vAlpha = 0.92 + 0.08 * sin(time * 0.8 + phase);
+                            
+                            // 计算最终位置
+                            vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                            gl_Position = projectionMatrix * mvPosition;
+                            
+                            // 点大小
+                            gl_PointSize = size * (350.0 / -mvPosition.z);
+                        }
+                    `,
+                    fragmentShader: `
+                        varying vec3 vColor;
+                        varying float vAlpha;
+                        
+                        void main() {
+                            // 圆形点精灵
+                            vec2 uv = gl_PointCoord - 0.5;
+                            float dist = length(uv);
+                            
+                            if (dist > 0.5) discard;
+                            
+                            // 柔和的边缘
+                            float alpha = 1.0 - smoothstep(0.35, 0.5, dist);
+                            
+                            // 轻微的内部发光
+                            float innerGlow = 1.0 - dist * 1.6;
+                            innerGlow = pow(innerGlow, 2.0);
+                            
+                            // 最终颜色
+                            gl_FragColor = vec4(vColor, alpha * innerGlow * vAlpha);
+                        }
+                    `,
+                    transparent: true,
+                    depthWrite: false,
+                    blending: THREE.AdditiveBlending,
+                    vertexColors: true
+                });
+                
+                // 创建粒子系统
+                particles = new THREE.Points(geometry, particleMaterial);
+                scene.add(particles);
+            }
+
+            initializeEventListeners() {
+                window.addEventListener('resize', () => {
+                    camera.aspect = window.innerWidth / window.innerHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                    if (particleMaterial && particleMaterial.uniforms.aspect) {
+                        particleMaterial.uniforms.aspect.value = window.innerWidth / window.innerHeight;
+                    }
+                });
+                
+                // 开始按钮
+                document.getElementById('startButton').addEventListener('click', () => {
+                    document.getElementById('permissionOverlay').classList.add('hidden');
+                    this.initializeHandTracking();
+                });
+            }
+
+            async initializeHandTracking() {
+                const video = document.getElementById('videoInput');
+                
+                try {
+                    // 获取摄像头权限
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: 640 },
+                            height: { ideal: 480 },
+                            facingMode: 'user'
+                        }
+                    });
+                    
+                    video.srcObject = stream;
+                    
+                    // 初始化手势识别
+                    hands = new Hands({
+                        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+                    });
+                    
+                    hands.setOptions({
+                        maxNumHands: 1,
+                        modelComplexity: 1,
+                        minDetectionConfidence: 0.6,
+                        minTrackingConfidence: 0.6
+                    });
+                    
+                    hands.onResults(this.handleHandResults.bind(this));
+                    
+                    // 启动摄像头
+                    const camera = new Camera(video, {
+                        onFrame: async () => {
+                            if (hands) {
+                                await hands.send({ image: video });
+                            }
+                        },
+                        width: 640,
+                        height: 480
+                    });
+                    
+                    await camera.start();
+                    
+                } catch (error) {
+                    console.error('摄像头初始化失败:', error);
+                    // 如果没有摄像头，允许鼠标控制
+                    this.enableMouseControl();
+                }
+            }
+
+            handleHandResults(results) {
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                     const landmarks = results.multiHandLandmarks[0];
+                    const now = Date.now();
                     
                     // 计算手指张开程度
                     const thumbTip = landmarks[4];
@@ -360,125 +623,178 @@
                     const middleTip = landmarks[12];
                     const ringTip = landmarks[16];
                     const pinkyTip = landmarks[20];
-                    
-                    // 计算指尖到掌心的平均距离
                     const wrist = landmarks[0];
+                    
+                    // 计算所有指尖到手腕的距离
                     const distances = [
-                        Math.sqrt(Math.pow(thumbTip.x - wrist.x, 2) + Math.pow(thumbTip.y - wrist.y, 2)),
-                        Math.sqrt(Math.pow(indexTip.x - wrist.x, 2) + Math.pow(indexTip.y - wrist.y, 2)),
-                        Math.sqrt(Math.pow(middleTip.x - wrist.x, 2) + Math.pow(middleTip.y - wrist.y, 2)),
-                        Math.sqrt(Math.pow(ringTip.x - wrist.x, 2) + Math.pow(ringTip.y - wrist.y, 2)),
-                        Math.sqrt(Math.pow(pinkyTip.x - wrist.x, 2) + Math.pow(pinkyTip.y - wrist.y, 2))
+                        this.calculateDistance(thumbTip, wrist),
+                        this.calculateDistance(indexTip, wrist),
+                        this.calculateDistance(middleTip, wrist),
+                        this.calculateDistance(ringTip, wrist),
+                        this.calculateDistance(pinkyTip, wrist)
                     ];
                     
+                    // 计算平均距离并归一化
                     const avgDistance = distances.reduce((a, b) => a + b) / distances.length;
+                    const normalizedDistance = Math.min(Math.max((avgDistance - 0.08) / 0.15, 0), 1);
                     
-                    // 映射到0-1范围
-                    let morphValue = (avgDistance - 0.1) / 0.2;
-                    morphValue = Math.max(0, Math.min(1, morphValue));
+                    // 使用缓动函数平滑值
+                    targetMorph = this.smoothStep(normalizedDistance);
                     
-                    targetMorph = morphValue;
+                    // 更新UI
+                    this.updateUI(targetMorph);
+                    
+                    lastHandTime = now;
+                    if (!handDetected) {
+                        handDetected = true;
+                    }
                     
                 } else {
-                    if (isHandDetected) {
-                        isHandDetected = false;
-                        updateGestureIndicator(false);
+                    // 没有检测到手，慢慢回归到0
+                    if (handDetected && Date.now() - lastHandTime > 500) {
+                        handDetected = false;
                     }
-                    targetMorph = 0;
                 }
-            });
-            
-            const camera = new Camera(video, {
-                onFrame: async () => {
-                    try {
-                        await hands.send({ image: video });
-                    } catch (e) {
-                        console.log('Camera error:', e);
-                    }
-                },
-                width: 320,
-                height: 240
-            });
-            
-            try {
-                await camera.start();
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('ui').style.opacity = 1;
-                
-                // 5秒后淡出提示
-                setTimeout(() => {
-                    document.getElementById('ui').style.opacity = 0;
-                }, 5000);
-                
-            } catch (error) {
-                console.error('Camera initialization failed:', error);
-                document.getElementById('loading').textContent = '请允许摄像头权限';
             }
-        }
 
-        // 更新手势指示器
-        function updateGestureIndicator(detected) {
-            const indicator = document.getElementById('gesture-indicator');
-            const icon = indicator.querySelector('.gesture-icon');
-            const text = indicator.querySelector('span:last-child');
-            
-            if (detected) {
-                if (targetMorph > 0.7) {
-                    icon.textContent = '✋';
-                    text.textContent = '圣诞树形态';
-                } else if (targetMorph < 0.3) {
-                    icon.textContent = '✊';
-                    text.textContent = '礼物形态';
+            calculateDistance(point1, point2) {
+                const dx = point1.x - point2.x;
+                const dy = point1.y - point2.y;
+                const dz = point1.z - point2.z;
+                return Math.sqrt(dx * dx + dy * dy + dz * dz);
+            }
+
+            smoothStep(x) {
+                return x * x * (3 - 2 * x);
+            }
+
+            updateUI(morphValue) {
+                const progressFill = document.getElementById('progressFill');
+                const handIcon = document.querySelector('.hand-icon');
+                const gestureText = document.querySelector('.gesture-text');
+                const dots = document.querySelectorAll('.transformation-dot');
+                
+                // 更新进度条
+                progressFill.style.width = `${morphValue * 100}%`;
+                
+                // 更新手势图标和文字
+                if (morphValue < 0.3) {
+                    handIcon.textContent = '✊';
+                    handIcon.style.transform = 'scale(1)';
+                    gestureText.textContent = '握拳 - 礼物形态';
+                    dots[0].classList.add('active');
+                    dots[1].classList.remove('active');
+                } else if (morphValue > 0.7) {
+                    handIcon.textContent = '🖐️';
+                    handIcon.style.transform = 'scale(1.1)';
+                    gestureText.textContent = '张手 - 圣诞树形态';
+                    dots[0].classList.remove('active');
+                    dots[1].classList.add('active');
                 } else {
-                    icon.textContent = '✋';
-                    text.textContent = '变形中...';
+                    handIcon.textContent = '✋';
+                    const scale = 1 + (morphValue - 0.3) * 0.25;
+                    handIcon.style.transform = `scale(${scale})`;
+                    gestureText.textContent = '变换中...';
+                    dots[0].classList.remove('active');
+                    dots[1].classList.remove('active');
                 }
-            } else {
-                icon.textContent = '👋';
-                text.textContent = '请将手放入画面中';
+            }
+
+            enableMouseControl() {
+                let mouseDown = false;
+                let mouseValue = 0;
+                
+                document.addEventListener('mousedown', (e) => {
+                    mouseDown = true;
+                    this.updateMouseValue(e.clientX);
+                });
+                
+                document.addEventListener('mousemove', (e) => {
+                    if (mouseDown) {
+                        this.updateMouseValue(e.clientX);
+                    }
+                });
+                
+                document.addEventListener('mouseup', () => {
+                    mouseDown = false;
+                });
+                
+                document.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    mouseDown = true;
+                    this.updateMouseValue(e.touches[0].clientX);
+                });
+                
+                document.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                    if (mouseDown) {
+                        this.updateMouseValue(e.touches[0].clientX);
+                    }
+                });
+                
+                document.addEventListener('touchend', () => {
+                    mouseDown = false;
+                });
+            }
+
+            updateMouseValue(clientX) {
+                const width = window.innerWidth;
+                mouseValue = Math.min(Math.max(clientX / width, 0), 1);
+                targetMorph = mouseValue;
+                this.updateUI(targetMorph);
+            }
+
+            animate(timestamp) {
+                animationFrameId = requestAnimationFrame(this.animate.bind(this));
+                
+                // 计算时间增量
+                const deltaTime = timestamp - lastUpdateTime || 0;
+                lastUpdateTime = timestamp;
+                const time = timestamp * 0.001;
+                
+                // 平滑过渡
+                const smoothing = handDetected ? CONFIG.handSmoothing : 0.05;
+                currentMorph += (targetMorph - currentMorph) * smoothing;
+                
+                // 更新粒子材质
+                if (particleMaterial) {
+                    particleMaterial.uniforms.time.value = time;
+                    particleMaterial.uniforms.morph.value = currentMorph;
+                }
+                
+                // 缓慢的自动旋转
+                if (particles) {
+                    particles.rotation.y += CONFIG.rotationSpeed * (1 - currentMorph * 0.5);
+                    
+                    // 轻微的摆动
+                    particles.rotation.x = Math.sin(time * 0.3) * CONFIG.maxRotationAngle * (1 - currentMorph);
+                    particles.rotation.z = Math.cos(time * 0.2) * CONFIG.maxRotationAngle * (1 - currentMorph) * 0.5;
+                }
+                
+                // 渲染
+                renderer.render(scene, camera);
+            }
+
+            destroy() {
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                }
+                if (renderer) {
+                    renderer.dispose();
+                }
             }
         }
 
-        // 动画循环
-        function animate() {
-            requestAnimationFrame(animate);
-            
-            const time = Date.now() * 0.001;
-            
-            // 平滑过渡变形值
-            currentMorph += (targetMorph - currentMorph) * 0.05;
-            
-            // 更新粒子材质
-            if (particleMaterial) {
-                particleMaterial.uniforms.time.value = time;
-                particleMaterial.uniforms.morph.value = currentMorph;
-            }
-            
-            // 缓慢旋转场景
-            scene.rotation.y = time * 0.05;
-            
-            // 渲染
-            renderer.render(scene, camera);
-        }
-
-        // 窗口大小调整
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        // 初始化
+        // 初始化应用
+        let app;
         window.addEventListener('DOMContentLoaded', () => {
-            initScene();
-            initHandTracking();
-            window.addEventListener('resize', onWindowResize);
+            app = new ParticleTransformation();
         });
 
-        // 点击切换全屏
-        document.addEventListener('click', () => {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(console.log);
+        // 清理
+        window.addEventListener('beforeunload', () => {
+            if (app) {
+                app.destroy();
             }
         });
     </script>
