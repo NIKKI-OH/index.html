@@ -1,15 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-      "troika-three-text": "https://unpkg.com/troika-three-text@0.47.1/dist/troika-three-text.esm.js"
-    }
-  }
-</script>
   <meta charset="UTF-8" />
   <meta
     name="viewport"
@@ -35,7 +26,7 @@
 /* =====================================================
    IMPORTS
 ===================================================== */
-import * as THREE from 'three';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js';
 import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -60,7 +51,6 @@ let currentMorph = 0;
    SHADERS
 ===================================================== */
 
-// ---------- Vertex Shader ----------
 const particleVertexShader = `
 precision highp float;
 
@@ -68,6 +58,7 @@ uniform float uTime;
 uniform float uMorph;
 uniform float uSize;
 
+attribute vec3 position;
 attribute vec3 positionGift;
 attribute vec3 positionTree;
 attribute float aRandom;
@@ -75,7 +66,6 @@ attribute float aRandom;
 varying float vRandom;
 varying float vMorph;
 
-/* Simplex Noise (compact) */
 vec4 permute(vec4 x) {
   return mod(((x*34.0)+1.0)*x, 289.0);
 }
@@ -141,7 +131,7 @@ void main() {
   vec3 pos = mix(positionGift, positionTree, uMorph);
 
   float noise = snoise(pos * 0.8 + uTime * 0.4);
-  float swirl = sin(uMorph * 3.1415) * 0.8;
+  float swirl = sin(uMorph * 3.14159) * 0.8;
   pos += normalize(pos) * noise * swirl;
 
   pos.y += snoise(pos + uTime * 0.2) * 0.15;
@@ -152,7 +142,6 @@ void main() {
 }
 `;
 
-// ---------- Fragment Shader ----------
 const particleFragmentShader = `
 precision highp float;
 
@@ -192,12 +181,7 @@ function init() {
   scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2(0x000000, 0.06);
 
-  camera = new THREE.PerspectiveCamera(
-    45,
-    window.innerWidth / window.innerHeight,
-    0.1,
-    100
-  );
+  camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
   camera.position.set(0, 0, 12);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -206,14 +190,13 @@ function init() {
   renderer.setClearColor(0x000000, 1);
   document.body.appendChild(renderer.domElement);
 
-  // Post Processing
   composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
 
   const bloomPass = new UnrealBloomPass(
     new THREE.Vector2(window.innerWidth, window.innerHeight),
-    1.6,
-    0.4,
+    1.9,   // 稍微提高，确保可见
+    0.45,
     0.1
   );
   composer.addPass(bloomPass);
@@ -241,21 +224,23 @@ function createParticles() {
   const treeRadius = 2.5;
 
   for (let i = 0; i < PARTICLE_COUNT; i++) {
-    gift[i*3]     = (Math.random()-0.5) * cubeSize;
-    gift[i*3 + 1] = (Math.random()-0.5) * cubeSize;
-    gift[i*3 + 2] = (Math.random()-0.5) * cubeSize;
+    gift[i*3]     = (Math.random() - 0.5) * cubeSize;
+    gift[i*3 + 1] = (Math.random() - 0.5) * cubeSize;
+    gift[i*3 + 2] = (Math.random() - 0.5) * cubeSize;
 
     const t = Math.random();
-    const angle = t * Math.PI * 12;
+    const angle = t * Math.PI * 12.0;
     const radius = (1.0 - t) * treeRadius;
 
     tree[i*3]     = Math.cos(angle) * radius;
-    tree[i*3 + 1] = t * treeHeight - treeHeight / 2;
+    tree[i*3 + 1] = t * treeHeight - treeHeight / 2.0;
     tree[i*3 + 2] = Math.sin(angle) * radius;
 
     randoms[i] = Math.random();
   }
 
+  // ⭐⭐⭐ 关键修复：position 必须存在 ⭐⭐⭐
+  geometry.setAttribute('position', new THREE.BufferAttribute(gift, 3));
   geometry.setAttribute('positionGift', new THREE.BufferAttribute(gift, 3));
   geometry.setAttribute('positionTree', new THREE.BufferAttribute(tree, 3));
   geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 1));
@@ -310,9 +295,8 @@ function onResize() {
    MediaPipe Placeholder
 ===================================================== */
 // TODO:
-// - 接入 MediaPipe Hands
 // - Open Hand → targetMorph = 1
-// - Point Gesture → Tarot Selection
+// - Close Hand → optional reverse
 </script>
 
 </body>
