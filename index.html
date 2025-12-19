@@ -1,19 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Magic Tarot Christmas</title>
+    <title>流光星尘圣诞树</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: -apple-system, sans-serif; }
-        #canvas-container { width: 100vw; height: 100vh; background: #000; }
-        #overlay {
+        body { margin: 0; overflow: hidden; background: #000; color: #fff; font-family: sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; }
+        #ui-layer {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            background: #000; color: #00ffcc; z-index: 100; transition: opacity 1s;
+            background: #000; z-index: 100; transition: opacity 1s; pointer-events: none;
         }
-        #video-input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
-        .loading-text { letter-spacing: 4px; font-size: 14px; text-shadow: 0 0 8px #00ffcc; }
+        .loading-spinner { width: 40px; height: 40px; border: 3px solid #00ffcc; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 15px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #video-input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+        .hint { position: absolute; bottom: 30px; font-size: 14px; color: #00ffcc; opacity: 0.8; letter-spacing: 2px; }
     </style>
     <script type="importmap">
         {
@@ -25,9 +27,10 @@
     </script>
 </head>
 <body>
-    <div id="overlay">
-        <div class="loading-text">✨ 正在召唤圣诞星尘...</div>
-        <div style="font-size: 10px; margin-top: 15px; opacity: 0.5;">请确保环境光线充足</div>
+    <div id="ui-layer">
+        <div class="loading-spinner"></div>
+        <div id="status">正在构筑流光星尘...</div>
+        <div class="hint">请确保摄像头权限已开启</div>
     </div>
     <video id="video-input" playsinline></video>
     <div id="canvas-container"></div>
@@ -41,129 +44,141 @@
         import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
         import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 
-        let uMorph = 0;
-        let isStarted = false;
+        let morphTarget = 0, currentMorph = 0, systemReady = false;
 
-        // --- 1. 极简场景构建 ---
+        // --- 1. 场景环境 ---
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 1.5, 12);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 2, 12);
 
         const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.2)); // 进一步降低DPI以求稳定
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
         const composer = new EffectComposer(renderer);
         composer.addPass(new RenderPass(scene, camera));
-        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 2.0, 0.4, 0.8);
+        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 2.5, 0.5, 0.85);
         composer.addPass(bloom);
 
-        // --- 2. 丝绸粒子构造 ---
-        const count = /Android|iPhone|iPad/i.test(navigator.userAgent) ? 18000 : 35000;
+        // --- 2. 极致粒子着色器 (还原拉丝质感) ---
+        const count = /Android|iPhone|iPad/i.test(navigator.userAgent) ? 25000 : 50000;
         const geo = new THREE.BufferGeometry();
-        const p1 = new Float32Array(count * 3);
-        const p2 = new Float32Array(count * 3);
-        const rand = new Float32Array(count);
+        const pInitial = new Float32Array(count * 3);
+        const pTarget = new Float32Array(count * 3);
+        const randoms = new Float32Array(count);
 
-        for(let i=0; i<count; i++) {
-            const i3 = i*3;
-            // 礼物态 (聚拢)
-            p1[i3] = (Math.random()-0.5)*4; p1[i3+1] = (Math.random()-0.5)*4; p1[i3+2] = (Math.random()-0.5)*4;
-            // 圣诞树 (螺旋拉丝)
-            const t = i/count;
-            const spiral = i % 16;
-            const angle = t * Math.PI * 22 + (spiral * Math.PI / 8);
-            const r = Math.pow(1.1 - t, 1.5) * 4.8;
-            p2[i3] = Math.cos(angle)*r; p2[i3+1] = t*10 - 5; p2[i3+2] = Math.sin(angle)*r;
-            rand[i] = Math.random();
+        for (let i = 0; i < count; i++) {
+            const i3 = i * 3;
+            // 礼物态 (凝聚的星云)
+            pInitial[i3] = (Math.random() - 0.5) * 4;
+            pInitial[i3+1] = (Math.random() - 0.5) * 4;
+            pInitial[i3+2] = (Math.random() - 0.5) * 4;
+
+            // 圣诞树态 (16路星轨螺旋)
+            const t = i / count;
+            const spiralIndex = i % 16;
+            const angle = t * Math.PI * 25 + (spiralIndex * Math.PI / 8);
+            const radius = Math.pow(1.1 - t, 1.5) * 4.8;
+            pTarget[i3] = Math.cos(angle) * radius;
+            pTarget[i3+1] = t * 10 - 5;
+            pTarget[i3+2] = Math.sin(angle) * radius;
+            randoms[i] = Math.random();
         }
 
-        geo.setAttribute('position', new THREE.BufferAttribute(p1, 3));
-        geo.setAttribute('aTarget', new THREE.BufferAttribute(p2, 3));
-        geo.setAttribute('aRand', new THREE.BufferAttribute(rand, 1));
+        geo.setAttribute('position', new THREE.BufferAttribute(pInitial, 3));
+        geo.setAttribute('aTarget', new THREE.BufferAttribute(pTarget, 3));
+        geo.setAttribute('aRand', new THREE.BufferAttribute(randoms, 1));
 
-        const mat = new THREE.ShaderMaterial({
-            uniforms: { uTime: {value:0}, uMorph: {value:0} },
+        const material = new THREE.ShaderMaterial({
+            uniforms: { uTime: { value: 0 }, uMorph: { value: 0 } },
             vertexShader: `
                 uniform float uTime; uniform float uMorph;
                 attribute vec3 aTarget; attribute float aRand;
-                varying vec3 vCol;
+                varying vec3 vCol; varying float vGlow;
                 void main() {
                     vec3 p = mix(position, aTarget, uMorph);
                     float rot = uTime * (0.1 + aRand * 0.2);
-                    float c=cos(rot); float s=sin(rot);
-                    p.xz *= mat2(c,-s,s,c);
-                    vCol = mix(vec3(1.0,0.1,0.3), vec3(0.0,1.0,0.8), uMorph + (p.y+5.0)/12.0);
+                    float c = cos(rot); float s = sin(rot);
+                    p.xz *= mat2(c, -s, s, c);
+                    // 渐变色彩：从深玫瑰红到翡翠绿
+                    vCol = mix(vec3(1.0, 0.1, 0.4), vec3(0.0, 1.0, 0.8), uMorph + (p.y + 5.0)/10.0);
+                    vGlow = aRand;
                     vec4 mvp = modelViewMatrix * vec4(p, 1.0);
-                    gl_PointSize = (6.0 * aRand + 2.0) * (20.0 / -mvp.z);
+                    gl_PointSize = (8.0 * aRand + 2.0) * (25.0 / -mvp.z);
                     gl_Position = projectionMatrix * mvp;
                 }
             `,
             fragmentShader: `
-                varying vec3 vCol;
+                varying vec3 vCol; varying float vGlow;
                 void main() {
                     float d = distance(gl_PointCoord, vec2(0.5));
-                    float g = pow(0.04 / d, 1.5);
-                    gl_FragColor = vec4(vCol * g, g);
+                    float g = pow(0.04 / d, 1.6); // 高级辉光算法
+                    gl_FragColor = vec4(vCol * g, g * vGlow);
                 }
             `,
             transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
         });
 
-        scene.add(new THREE.Points(geo, mat));
+        const points = new THREE.Points(geo, material);
+        scene.add(points);
 
-        // --- 3. 手势与摄像机逻辑 ---
-        async function init() {
+        // --- 3. 稳定交互逻辑 ---
+        async function startSystem() {
             const video = document.getElementById('video-input');
             const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
             
             hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.5 });
             hands.onResults((res) => {
-                if(res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
+                if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
                     const lm = res.multiHandLandmarks[0];
-                    const gap = Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y);
-                    uMorph = Math.min(Math.max((gap - 0.08) * 3.5, 0), 1);
-                } else { uMorph *= 0.9; }
+                    const d = Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y); // 虎口开合度
+                    morphTarget = THREE.MathUtils.clamp((d - 0.1) * 3.5, 0, 1);
+                } else {
+                    morphTarget = 0;
+                }
             });
 
-            const cam = new Camera(video, {
-                onFrame: async () => { if(isStarted) await hands.send({image: video}); },
+            const cameraHelper = new Camera(video, {
+                onFrame: async () => { if(systemReady) await hands.send({image: video}); },
                 width: 480, height: 360
             });
 
             try {
-                await cam.start();
-                // 关键点：等待2秒确保MediaPipe预热
+                await cameraHelper.start();
                 setTimeout(() => {
-                    isStarted = true;
-                    document.getElementById('overlay').style.opacity = '0';
-                    setTimeout(() => document.getElementById('overlay').remove(), 1000);
-                    loop();
-                }, 2000);
-            } catch (err) {
-                document.getElementById('loading-text').innerHTML = "请在浏览器设置中开启摄像头权限";
+                    systemReady = true;
+                    document.getElementById('ui-layer').style.opacity = 0;
+                    setTimeout(() => document.getElementById('ui-layer').remove(), 1000);
+                    animate();
+                }, 2000); // 延迟2秒等待摄像头和模型稳定，彻底解决闪烁
+            } catch (e) {
+                document.getElementById('status').innerHTML = "权限被拦截，请允许使用摄像头";
             }
         }
 
         const clock = new THREE.Clock();
-        function loop() {
-            requestAnimationFrame(loop);
+        function animate() {
+            requestAnimationFrame(animate);
+            if(!systemReady) return;
+            
             const t = clock.getElapsedTime();
-            mat.uniforms.uTime.value = t;
-            mat.uniforms.uMorph.value += (uMorph - mat.uniforms.uMorph.value) * 0.1;
+            material.uniforms.uTime.value = t;
+            currentMorph += (morphTarget - currentMorph) * 0.08;
+            material.uniforms.uMorph.value = currentMorph;
+            
             scene.rotation.y += 0.005;
             composer.render();
         }
 
         window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth/window.innerHeight;
+            camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
             composer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        init();
+        startSystem();
     </script>
 </body>
 </html>
