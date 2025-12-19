@@ -3,18 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dreamy Christmas Star</title>
+    <title>Golden Silk Christmas</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: -apple-system, sans-serif; }
-        #canvas-container { width: 100vw; height: 100vh; background: #000; position: absolute; top: 0; left: 0; }
-        #overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            background: #000; color: #00ffcc; z-index: 100; transition: opacity 1s; pointer-events: none;
-        }
-        .loading-text { letter-spacing: 4px; font-size: 14px; text-shadow: 0 0 10px #00ffcc; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-        #video-input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+        body { margin: 0; overflow: hidden; background: #000; }
+        #canvas-container { width: 100vw; height: 100vh; background: #000; position: fixed; }
+        #ui { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #0ff; z-index: 100; pointer-events: none; transition: 1s; letter-spacing: 2px;}
+        #video-input { position: absolute; opacity: 0; width: 1px; height: 1px; }
     </style>
     <script type="importmap">
         {
@@ -26,10 +20,7 @@
     </script>
 </head>
 <body>
-    <div id="overlay">
-        <div class="loading-text">✨ 正在召唤流光星尘...</div>
-        <div style="font-size: 10px; margin-top: 10px; opacity: 0.5;">请允许摄像头权限以开启交互</div>
-    </div>
+    <div id="ui">✨ 正在连接星尘...</div>
     <video id="video-input" playsinline></video>
     <div id="canvas-container"></div>
 
@@ -42,11 +33,9 @@
         import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
         import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 
-        let morphTarget = 0;
-        let morphCurrent = 0;
-        let initialized = false;
+        let targetMorph = 0, currentMorph = 0;
 
-        // --- 1. 场景环境 ---
+        // --- 1. 渲染架构 ---
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 1.5, 12);
@@ -58,72 +47,74 @@
 
         const composer = new EffectComposer(renderer);
         composer.addPass(new RenderPass(scene, camera));
-        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 2.2, 0.4, 0.85);
+        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 2.5, 0.5, 0.85);
         composer.addPass(bloom);
 
-        // --- 2. 丝绸粒子构造 (12路双螺旋，还原参考图拉丝感) ---
-        const count = /iPhone|iPad|Android/i.test(navigator.userAgent) ? 20000 : 40000;
+        // --- 2. 极致拉丝粒子 (16层螺旋线) ---
+        const count = /iPhone|iPad|Android/i.test(navigator.userAgent) ? 22000 : 45000;
         const geo = new THREE.BufferGeometry();
         const p1 = new Float32Array(count * 3);
         const p2 = new Float32Array(count * 3);
-        const randoms = new Float32Array(count);
+        const rand = new Float32Array(count);
 
         for (let i = 0; i < count; i++) {
             const i3 = i * 3;
-            // 礼物态
+            // 礼物形态 (立方体)
             p1[i3] = (Math.random() - 0.5) * 4;
             p1[i3+1] = (Math.random() - 0.5) * 4;
             p1[i3+2] = (Math.random() - 0.5) * 4;
 
-            // 圣诞树态 (非线性拉丝螺旋)
+            // 圣诞树形态 (丝绸螺旋)
             const t = i / count;
-            const branch = i % 12;
-            const angle = t * Math.PI * 22 + (branch * Math.PI / 6);
-            const radius = Math.pow(1.1 - t, 1.6) * 4.8;
+            const spiral = i % 16;
+            const angle = t * Math.PI * 24 + (spiral * Math.PI / 8);
+            const radius = Math.pow(1.1 - t, 1.5) * 4.5;
             p2[i3] = Math.cos(angle) * radius;
             p2[i3+1] = t * 10 - 5.5;
             p2[i3+2] = Math.sin(angle) * radius;
-            randoms[i] = Math.random();
+            rand[i] = Math.random();
         }
 
         geo.setAttribute('position', new THREE.BufferAttribute(p1, 3));
         geo.setAttribute('aTarget', new THREE.BufferAttribute(p2, 3));
-        geo.setAttribute('aRand', new THREE.BufferAttribute(randoms, 1));
+        geo.setAttribute('aRand', new THREE.BufferAttribute(rand, 1));
 
         const mat = new THREE.ShaderMaterial({
             uniforms: { uTime: { value: 0 }, uMorph: { value: 0 } },
             vertexShader: `
                 uniform float uTime; uniform float uMorph;
                 attribute vec3 aTarget; attribute float aRand;
-                varying vec3 vCol;
+                varying vec3 vCol; varying float vSize;
                 void main() {
                     vec3 p = mix(position, aTarget, uMorph);
-                    float rot = uTime * (0.15 + aRand * 0.2);
+                    float rot = uTime * (0.2 + aRand * 0.2);
                     float c = cos(rot); float s = sin(rot);
                     p.xz *= mat2(c, -s, s, c);
-                    // 渐变色：深玫瑰红 -> 极光青绿
-                    vCol = mix(vec3(1.0, 0.05, 0.3), vec3(0.0, 1.0, 0.7), uMorph + (p.y + 5.5)/11.0);
+                    // 动态色漂移：深宝石红 到 梦幻翡翠
+                    vCol = mix(vec3(1.0, 0.05, 0.2), vec3(0.0, 1.0, 0.6), uMorph + (p.y + 5.5)/11.0);
+                    vSize = aRand;
                     vec4 mvp = modelViewMatrix * vec4(p, 1.0);
-                    gl_PointSize = (7.0 * aRand + 2.0) * (20.0 / -mvp.z);
+                    gl_PointSize = (8.0 * aRand + 2.0) * (20.0 / -mvp.z);
                     gl_Position = projectionMatrix * mvp;
                 }
             `,
             fragmentShader: `
-                varying vec3 vCol;
+                varying vec3 vCol; varying float vSize;
                 void main() {
-                    float d = distance(gl_PointCoord, vec2(0.5));
-                    float g = pow(0.05 / d, 1.6);
-                    gl_FragColor = vec4(vCol * g, g);
+                    vec2 uv = gl_PointCoord - vec2(0.5);
+                    // 拉丝星芒算法
+                    float d = length(uv);
+                    float glow = 0.008 / d + 0.002 / abs(uv.x * 20.0);
+                    gl_FragColor = vec4(vCol * glow, glow * vSize);
                 }
             `,
             transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
         });
 
-        const points = new THREE.Points(geo, mat);
-        scene.add(points);
+        scene.add(new THREE.Points(geo, mat));
 
-        // --- 3. 安全交互逻辑 (不再强制依赖摄像头启动) ---
-        async function startApp() {
+        // --- 3. 手势控制 (防闪烁逻辑) ---
+        async function init() {
             const video = document.getElementById('video-input');
             const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
             
@@ -131,29 +122,23 @@
             hands.onResults((res) => {
                 if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
                     const lm = res.multiHandLandmarks[0];
-                    const d = Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y);
-                    morphTarget = THREE.MathUtils.clamp((d - 0.1) * 3.5, 0, 1);
+                    const dist = Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y);
+                    targetMorph = THREE.MathUtils.clamp((dist - 0.1) * 3.5, 0, 1);
                 } else {
-                    morphTarget = 0;
+                    // 关键：检测不到手时，targetMorph 保持当前值或缓慢回归，不触发闪烁
+                    targetMorph = 0;
                 }
             });
 
-            // 无论摄像头是否成功，2秒后强行进入画面，杜绝闪烁
-            setTimeout(() => {
-                initialized = true;
-                document.getElementById('overlay').style.opacity = '0';
-                setTimeout(() => document.getElementById('overlay').remove(), 1000);
-            }, 2000);
-
             const cam = new Camera(video, {
-                onFrame: async () => { try { await hands.send({image: video}); } catch(e){} },
+                onFrame: async () => { await hands.send({image: video}); },
                 width: 480, height: 360
             });
             
-            cam.start().catch(err => {
-                console.log("摄像头不可用，切换为演示模式");
-                // 备选方案：如果没有摄像头，就随时间自动变换
-                setInterval(() => { morphTarget = morphTarget === 0 ? 1 : 0; }, 5000);
+            cam.start().then(() => {
+                document.getElementById('ui').style.opacity = '0';
+            }).catch(() => {
+                document.getElementById('ui').innerHTML = "请开启摄像头权限并刷新";
             });
         }
 
@@ -163,15 +148,15 @@
             const t = clock.getElapsedTime();
             mat.uniforms.uTime.value = t;
             
-            // 平滑形态过渡
-            morphCurrent += (morphTarget - morphCurrent) * 0.08;
-            mat.uniforms.uMorph.value = morphCurrent;
+            // 平滑插值：这是防止闪烁的核心，形态变化是渐进的
+            currentMorph += (targetMorph - currentMorph) * 0.1;
+            mat.uniforms.uMorph.value = currentMorph;
             
-            scene.rotation.y += 0.005;
+            scene.rotation.y += 0.004;
             composer.render();
         }
 
-        startApp();
+        init();
         loop();
 
         window.addEventListener('resize', () => {
