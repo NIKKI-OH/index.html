@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Luxury Cyber-Christmas | Lead Tech Edition</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Lato:wght@300&display=swap');
+
+    body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Lato', sans-serif; }
+    
+    #ui-layer {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        z-index: 10; pointer-events: none;
+        display: flex; flex-direction: column; justify-content: space-between; padding: 40px;
+        box-sizing: border-box;
+        background: radial-gradient(circle, rgba(0,0,0,0) 50%, rgba(0,0,0,0.8) 100%); /* Vignette via CSS */
+    }
+
+    h1 {
+        font-family: 'Cinzel', serif; color: #DAA520; /* Liquid Gold */
+        font-size: clamp(1.2rem, 4vw, 2.5rem); letter-spacing: 0.2em; text-transform: uppercase;
+        margin: 0; text-shadow: 0 0 20px rgba(218, 165, 32, 0.4);
+    }
+
+    .hud-text {
+        font-size: 0.8rem; color: rgba(255,255,255,0.5); letter-spacing: 1px;
+        border-left: 2px solid #DAA520; padding-left: 10px;
+    }
+
+    #loading-overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background: #000; z-index: 20; display: flex; align-items: center; justify-content: center;
+        transition: opacity 1s; pointer-events: none;
+    }
+    .loader-content { text-align: center; color: #DAA520; font-family: 'Cinzel', serif; }
+
+    #gesture-debug {
+        position: absolute; bottom: 40px; right: 40px; text-align: right;
+        font-family: 'Courier New', monospace; font-size: 0.8rem; color: #00FFFF;
+        text-shadow: 0 0 5px #00FFFF;
+    }
+
+    .input_video { display: none; }
+</style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+<div id="loading-overlay">
+    <div class="loader-content">
+        <h2>INITIALIZING SYSTEM</h2>
+        <p>Loading High-Fidelity Assets...</p>
+    </div>
+</div>
+
+<div id="ui-layer">
+    <div>
+        <h1>Cyber Christmas</h1>
+        <div class="hud-text">LUXURY EDITION // PERFORMANCE MODE: <span id="perf-mode">DETECTING...</span></div>
+    </div>
+    <div id="gesture-debug">
+        STATUS: SYSTEM READY<br>
+        GESTURE: NONE
+    </div>
+</div>
+
+<video class="input_video"></video>
+
+<script type="x-shader/x-vertex" id="vertexShader">
+    uniform float uTime;
+    uniform float uMorph;    // 0 = Gift, 1 = Tree
+    uniform float uBurst;    // V-Sign Burst factor
+    uniform float uFreeze;   // Fist Freeze factor
+    uniform float uPixelRatio;
+
+    attribute vec3 aPosGift;
+    attribute vec3 aPosTree;
+    attribute vec3 aColorGift;
+    attribute vec3 aColorTree;
+    attribute float aSize;
+    attribute float aRandom;
+
+    varying vec3 vColor;
+    varying float vAlpha;
+
+    // Simplex Noise (Simplified for performance)
+    vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+    vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+    vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+    vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+
+    float snoise(vec3 v) {
+        const vec2  C = vec2(1.0/6.0, 1.0/3.0) ;
+        const vec4  D = vec4(0.0, 0.5, 1.0, 2.0);
+        vec3 i  = floor(v + dot(v, C.yyy) );
+        vec3 x0 = v - i + dot(i, C.xxx) ;
+        vec3 g = step(x0.yzx, x0.xyz);
+        vec3 l = 1.0 - g;
+        vec3 i1 = min( g.xyz, l.zxy );
+        vec3 i2 = max( g.xyz, l.zxy );
+        vec3 x1 = x0 - i1 + C.xxx;
+        vec3 x2 = x0 - i2 + C.yyy;
+        vec3 x3 = x0 - D.yyy;
+        i = mod289(i);
+        vec4 p = permute( permute( permute(
+                i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+                + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
+                + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+        float n_ = 0.142857142857;
+        vec3  ns = n_ * D.wyz - D.xzx;
+        vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+        vec4 x_ = floor(j * ns.z);
+        vec4 y_ = floor(j - 7.0 * x_ );
+        vec4 x = x_ *ns.x + ns.yyyy;
+        vec4 y = y_ *ns.x + ns.yyyy;
+        vec4 h = 1.0 - abs(x) - abs(y);
+        vec4 b0 = vec4( x.xy, y.xy );
+        vec4 b1 = vec4( x.zw, y.zw );
+        vec4 s0 = floor(b0)*2.0 + 1.0;
+        vec4 s1 = floor(b1)*2.0 + 1.0;
+        vec4 sh = -step(h, vec4(0.0));
+        vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+        vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+        vec3 p0 = vec3(a0.xy,h.x);
+        vec3 p1 = vec3(a0.zw,h.y);
+        vec3 p2 = vec3(a1.xy,h.z);
+        vec3 p3 = vec3(a1.zw,h.w);
+        vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+        p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+        vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+        m = m * m;
+        return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
+    }
+
+    void main() {
+        // 1. Morphing Logic
+        vec3 targetPos = mix(aPosGift, aPosTree, smoothstep(0.0, 1.0, uMorph));
+        
+        // 2. Organic Turbulence (Noise)
+        float noiseFreq = 0.5;
+        float noiseAmp = 0.2 * (1.0 - uFreeze); // Freeze stops turbulence
+        float time = uTime * 0.5 * (1.0 - uFreeze);
+        
+        vec3 noiseOffset = vec3(
+            snoise(vec3(targetPos.x * noiseFreq + time, targetPos.y, targetPos.z)),
+            snoise(vec3(targetPos.x, targetPos.y * noiseFreq + time, targetPos.z)),
+            snoise(vec3(targetPos.x, targetPos.y, targetPos.z * noiseFreq + time))
+        );
+        
+        vec3 finalPos = targetPos + noiseOffset * noiseAmp;
+
+        // 3. V-Sign Burst Logic (Explosion)
+        // Push particles outward from center based on uBurst
+        vec3 burstDir = normalize(finalPos);
+        finalPos += burstDir * uBurst * 5.0 * aRandom; 
+
+        vec4 mvPosition = modelViewMatrix * vec4(finalPos, 1.0);
+        gl_Position = projectionMatrix * mvPosition;
+
+        // 4. Color Interpolation
+        vColor = mix(aColorGift, aColorTree, uMorph);
+        
+        // Burst turns particles bright white/gold
+        vColor = mix(vColor, vec3(1.0, 0.9, 0.5), uBurst * 0.8);
+
+        // 5. Size Calculation
+        // Size attenuates with distance + pulse effect
+        float pulse = 1.0 + sin(uTime * 3.0 + aRandom * 10.0) * 0.3 * (1.0 - uFreeze);
+        gl_PointSize = aSize * pulse * uPixelRatio * (200.0 / -mvPosition.z);
+        
+        // Fade out slightly during burst
+        vAlpha = 1.0 - uBurst * 0.5;
+    }
+</script>
+
+<script type="x-shader/x-fragment" id="fragmentShader">
+    varying vec3 vColor;
+    varying float vAlpha;
+
+    void main() {
+        // Soft Glow Calculation (No Texture needed)
+        float d = distance(gl_PointCoord, vec2(0.5));
+        
+        // Inverse square falloff for volumetric glow
+        float strength = 0.05 / (d - 0.05); // Standard glow
+        
+        // Sharper core
+        float core = 1.0 - smoothstep(0.0, 0.5, d);
+        
+        // Combine
+        float finalAlpha = (strength + core * 0.5) * vAlpha;
+        
+        // Vignette effect on individual particle (optional, keeps edges soft)
+        if(d > 0.5) discard;
+
+        gl_FragColor = vec4(vColor, finalAlpha * 0.8);
+    }
+</script>
+
+<script>
+/**
+ * CLASS: Experience
+ * The master controller handling Scene, Renderer, and Loop.
+ */
+class Experience {
+    constructor() {
+        this.container = document.body;
+        this.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        // Performance Config
+        this.config = {
+            count: this.isMobile ? 15000 : 60000, // Adaptive Particle Count
+            pixelRatio: Math.min(window.devicePixelRatio, this.isMobile ? 1.5 : 2),
+            colors: {
+                treeTop: new THREE.Color('#00FFFF'), // Shimmering Aqua
+                treeBottom: new THREE.Color('#0A3828'), // Deep Forest Green
+                giftRed: new THREE.Color('#C70039'), // Rubine Red
+                giftGold: new THREE.Color('#DAA520')  // Liquid Gold
+            }
+        };
+
+        document.getElementById('perf-mode').innerText = this.isMobile ? "MOBILE OPTIMIZED" : "HIGH FIDELITY";
+
+        this.initScene();
+        this.initPostProcessing();
+        this.initParticles();
+        this.initInputs(); // Mouse fallback
+        this.initMediaPipe(); // Gesture control
+        this.animate();
+
+        // Reveal UI
+        setTimeout(() => {
+            document.getElementById('loading-overlay').style.opacity = 0;
+            setTimeout(() => document.getElementById('loading-overlay').remove(), 1000);
+        }, 1500);
+
+        window.addEventListener('resize', this.onResize.bind(this));
+    }
+
+    initScene() {
+        this.scene = new THREE.Scene();
+        this.scene.fog = new THREE.FogExp2(0x000000, 0.02); // Depth cue
+
+        this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        this.camera.position.set(0, 0, 8);
+
+        this.renderer = new THREE.WebGLRenderer({ 
+            antialias: false, // False because we use EffectComposer 
+            powerPreference: "high-performance" 
+        });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.setPixelRatio(this.config.pixelRatio);
+        this.container.appendChild(this.renderer.domElement);
+    }
+
+    initPostProcessing() {
+        // High-end Bloom Logic
+        this.composer = new THREE.EffectComposer(this.renderer);
+        
+        const renderPass = new THREE.RenderPass(this.scene, this.camera);
+        this.composer.addPass(renderPass);
+
+        // Unreal Bloom - The "WOW" factor
+        const bloomPass = new THREE.UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.5, 0.4, 0.85
+        );
+        bloomPass.threshold = 0.0;
+        bloomPass.strength = this.isMobile ? 1.2 : 2.0; // Tone down on mobile
+        bloomPass.radius = 0.5;
+        this.composer.addPass(bloomPass);
+
+        // Chromatic Aberration (Custom ShaderPass would go here, simplified for single-file)
+    }
+
+    initParticles() {
+        const { count, colors } = this.config;
+        const geometry = new THREE.BufferGeometry();
+
+        const posGift = [];
+        const posTree = [];
+        const colGift = [];
+        const colTree = [];
+        const sizes = [];
+        const randoms = [];
+
+        for (let i = 0; i < count; i++) {
+            const r = Math.random();
+            randoms.push(r);
+            sizes.push((Math.random() * 0.5 + 0.5));
+
+            // --- GIFT STATE (Cube with Outlines) ---
+            let gx = (Math.random() - 0.5) * 3.0;
+            let gy = (Math.random() - 0.5) * 3.0;
+            let gz = (Math.random() - 0.5) * 3.0;
+            
+            // "Liquid Gold" Streaks (Concentrate particles on edges)
+            const isEdge = Math.random() > 0.8 && (Math.abs(gx) > 1.4 || Math.abs(gy) > 1.4);
+            if(isEdge) {
+                // Outline Color
+                colGift.push(colors.giftGold.r, colors.giftGold.g, colors.giftGold.b);
+            } else {
+                // Inner Translucent Red
+                colGift.push(colors.giftRed.r, colors.giftRed.g, colors.giftRed.b);
+            }
+            posGift.push(gx, gy, gz);
+
+
+            // --- TREE STATE (Spiral Cone) ---
+            const angle = i * 0.05; // Tight spiral
+            const h = (i / count) * 7.0 - 3.5; // Height -3.5 to 3.5
+            const radius = (3.5 - h) * 0.45; // Cone shape
+            
+            // Add turbulence to tree
+            const tx = Math.cos(angle) * radius + (Math.random()-0.5)*0.5;
+            const ty = h + (Math.random()-0.5)*0.5;
+            const tz = Math.sin(angle) * radius + (Math.random()-0.5)*0.5;
+            posTree.push(tx, ty, tz);
+
+            // Gradient Color for Tree
+            const mixVal = (h + 3.5) / 7.0; // 0 to 1 based on height
+            const cT = colors.treeBottom.clone().lerp(colors.treeTop, mixVal);
+            
+            // Random iridescent purple hints
+            if(Math.random() > 0.95) {
+                colTree.push(0.6, 0.2, 0.8); // Purple
+            } else {
+                colTree.push(cT.r, cT.g, cT.b);
+            }
+        }
+
+        geometry.setAttribute('aPosGift', new THREE.Float32BufferAttribute(posGift, 3));
+        geometry.setAttribute('aPosTree', new THREE.Float32BufferAttribute(posTree, 3));
+        geometry.setAttribute('aColorGift', new THREE.Float32BufferAttribute(colGift, 3));
+        geometry.setAttribute('aColorTree', new THREE.Float32BufferAttribute(colTree, 3));
+        geometry.setAttribute('aSize', new THREE.Float32BufferAttribute(sizes, 1));
+        geometry.setAttribute('aRandom', new THREE.Float32BufferAttribute(randoms, 1));
+
+        this.material = new THREE.ShaderMaterial({
+            vertexShader: document.getElementById('vertexShader').textContent,
+            fragmentShader: document.getElementById('fragmentShader').textContent,
+            uniforms: {
+                uTime: { value: 0 },
+                uMorph: { value: 0 },
+                uBurst: { value: 0 },
+                uFreeze: { value: 0 },
+                uPixelRatio: { value: this.config.pixelRatio }
+            },
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        this.particles = new THREE.Points(geometry, this.material);
+        this.scene.add(this.particles);
+    }
+
+    initInputs() {
+        // Fallback: Click to Morph
+        this.targetMorph = 0;
+        this.targetBurst = 0;
+        this.targetFreeze = 0;
+
+        window.addEventListener('mousedown', () => { this.targetMorph = 1; });
+        window.addEventListener('mouseup', () => { this.targetMorph = 0; });
+    }
+
+    initMediaPipe() {
+        const videoElement = document.getElementsByClassName('input_video')[0];
+        const debug = document.getElementById('gesture-debug');
+
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: this.isMobile ? 0 : 1, // Optimize model for mobile
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults((results) => {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const lm = results.multiHandLandmarks[0];
+                
+                // 1. OPEN PALM DETECTION (Morph)
+                // Distance between thumb tip and index tip normalized by palm size
+                const thumbTip = lm[4];
+                const indexTip = lm[8];
+                const wrist = lm[0];
+                const middleFingerMCP = lm[9]; // Palm center ref
+                
+                const palmSize = Math.sqrt(Math.pow(wrist.x - middleFingerMCP.x, 2) + Math.pow(wrist.y - middleFingerMCP.y, 2));
+                const fingerDist = Math.sqrt(Math.pow(thumbTip.x - indexTip.x, 2) + Math.pow(thumbTip.y - indexTip.y, 2));
+                
+                // Normalize openness (approximate)
+                let openness = (fingerDist / palmSize) - 0.2; 
+                openness = Math.max(0, Math.min(1, openness * 1.5)); // Clamp 0-1
+                
+                // 2. FIST DETECTION (Freeze)
+                // Check if finger tips are below finger PIP joints (curled)
+                const isFist = lm[8].y > lm[6].y && lm[12].y > lm[10].y && lm[16].y > lm[14].y;
+
+                // 3. V-SIGN DETECTION (Burst)
+                // Index and Middle extended, others curled
+                const isV = lm[8].y < lm[6].y && lm[12].y < lm[10].y && lm[16].y > lm[14].y && lm[20].y > lm[18].y;
+
+                // LOGIC ROUTING
+                if (isFist) {
+                    this.targetFreeze = 1;
+                    this.targetBurst = 0;
+                    debug.innerHTML = "STATUS: HAND DETECTED<br>GESTURE: FIST (FREEZE)";
+                } else if (isV) {
+                    this.targetBurst = 1;
+                    this.targetFreeze = 0;
+                    debug.innerHTML = "STATUS: HAND DETECTED<br>GESTURE: V-SIGN (BURST)";
+                } else {
+                    this.targetFreeze = 0;
+                    this.targetBurst = 0;
+                    this.targetMorph = openness; // Continuous morph
+                    debug.innerHTML = `STATUS: HAND DETECTED<br>GESTURE: OPEN PALM (${Math.round(openness*100)}%)`;
+                }
+
+            } else {
+                debug.innerHTML = "STATUS: SEARCHING...<br>GESTURE: NONE";
+                // Reset if no hand
+                this.targetFreeze = 0;
+                this.targetBurst = 0;
+                this.targetMorph = 0;
+            }
+        });
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 640, height: 480
+        });
+        
+        // Start camera slightly delayed to prioritize graphics load
+        setTimeout(() => {
+            camera.start().catch(e => {
+                debug.innerHTML = "CAMERA ERROR<br>USE MOUSE CLICK";
+            });
+        }, 1000);
+    }
+
+    onResize() {
+        this.camera.aspect = window.innerWidth / window.innerHeight;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.composer.setSize(window.innerWidth, window.innerHeight);
+        if(this.material) this.material.uniforms.uPixelRatio.value = Math.min(window.devicePixelRatio, 2);
+    }
+
+    animate() {
+        requestAnimationFrame(this.animate.bind(this));
+        
+        const u = this.material.uniforms;
+        
+        // Time
+        u.uTime.value += 0.01;
+
+        // Smooth Interpolation (Lerp) for high-end feel
+        // Prevents jitter from MediaPipe raw data
+        u.uMorph.value += (this.targetMorph - u.uMorph.value) * 0.05;
+        u.uFreeze.value += (this.targetFreeze - u.uFreeze.value) * 0.1;
+        
+        // Burst needs to decay automatically if not held, or snap up fast
+        if(this.targetBurst > 0.5) {
+            u.uBurst.value += (1.0 - u.uBurst.value) * 0.1;
+        } else {
+            u.uBurst.value += (0.0 - u.uBurst.value) * 0.05;
+        }
+
+        // Camera gentle rotation
+        const rotSpeed = 0.2 * (1.0 - u.uFreeze.value);
+        this.particles.rotation.y = u.uTime.value * rotSpeed;
+
+        // Render via Composer (Bloom)
+        this.composer.render();
+    }
+}
+
+// Start Experience
+new Experience();
+
+</script>
+</body>
+</html>
