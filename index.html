@@ -3,11 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Stellar Silk Pro</title>
+    <title>Anti-Flash Christmas</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
         #canvas-container { width: 100vw; height: 100vh; position: fixed; background: #000; }
-        #status-ui { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #00ffcc; z-index: 100; pointer-events: none; font-family: sans-serif; letter-spacing: 2px; text-shadow: 0 0 10px #00ffcc; transition: opacity 0.5s; }
+        #ui { 
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            color: #00ffcc; z-index: 100; pointer-events: none; 
+            font-family: sans-serif; letter-spacing: 2px; text-shadow: 0 0 10px #00ffcc;
+            text-align: center;
+        }
         #video-input { position: absolute; opacity: 0; width: 1px; height: 1px; }
     </style>
     <script type="importmap">
@@ -20,7 +25,7 @@
     </script>
 </head>
 <body>
-    <div id="status-ui">✨ 正在同步星尘频率...</div>
+    <div id="ui">✨ 正在校准光子能量...</div>
     <video id="video-input" playsinline></video>
     <div id="canvas-container"></div>
 
@@ -36,23 +41,26 @@
         let targetMorph = 0, currentMorph = 0;
         let lastTime = 0;
 
-        // --- 1. 渲染架构 (针对高刷设备优化) ---
+        // --- 1. 渲染架构 ---
         const scene = new THREE.Scene();
+        // 调整相机距离，离得稍微远一点，防止盒子糊在脸上
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 1.5, 12);
+        camera.position.set(0, 1.0, 14); 
 
         const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        // 限制像素比，iPhone 16 Pro 屏幕太高清了，不仅耗电还会加剧白屏
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
         const composer = new EffectComposer(renderer);
         composer.addPass(new RenderPass(scene, camera));
-        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 2.2, 0.4, 0.85);
+        // 降低 Bloom 强度，防止光爆
+        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
         composer.addPass(bloom);
 
-        // --- 2. 极致粒子构造 ---
-        const count = 30000;
+        // --- 2. 粒子系统 (智能光感) ---
+        const count = 30000; // 保持适中数量
         const geo = new THREE.BufferGeometry();
         const pGift = new Float32Array(count * 3);
         const pTree = new Float32Array(count * 3);
@@ -60,16 +68,18 @@
 
         for (let i = 0; i < count; i++) {
             const i3 = i * 3;
-            pGift[i3] = (Math.random() - 0.5) * 4;
-            pGift[i3+1] = (Math.random() - 0.5) * 4;
-            pGift[i3+2] = (Math.random() - 0.5) * 4;
+            // 礼物形态：稍微扩大一点体积，减少密度，防止太亮
+            pGift[i3] = (Math.random() - 0.5) * 5.0;
+            pGift[i3+1] = (Math.random() - 0.5) * 5.0;
+            pGift[i3+2] = (Math.random() - 0.5) * 5.0;
 
+            // 圣诞树形态
             const t = i / count;
             const spiral = i % 14;
-            const angle = t * Math.PI * 25 + (spiral * Math.PI / 7);
-            const radius = Math.pow(1.1 - t, 1.5) * 4.8;
+            const angle = t * Math.PI * 24 + (spiral * Math.PI / 7);
+            const radius = Math.pow(1.1 - t, 1.5) * 5.5;
             pTree[i3] = Math.cos(angle) * radius;
-            pTree[i3+1] = t * 10 - 5.5;
+            pTree[i3+1] = t * 12 - 6;
             pTree[i3+2] = Math.sin(angle) * radius;
             rands[i] = Math.random();
         }
@@ -83,32 +93,43 @@
             vertexShader: `
                 uniform float uTime; uniform float uMorph;
                 attribute vec3 aTarget; attribute float aRand;
-                varying vec3 vCol;
+                varying vec3 vCol; varying float vAlpha;
                 void main() {
-                    // 核心自查点：严格限制插值范围
+                    // 安全过滤
                     float m = clamp(uMorph, 0.0, 1.0);
                     vec3 p = mix(position, aTarget, m);
                     
-                    float rot = uTime * (0.12 + aRand * 0.15);
-                    float s = sin(rot); float c = cos(rot);
+                    // 旋转动画
+                    float rot = uTime * (0.1 + aRand * 0.15);
+                    float c = cos(rot); float s = sin(rot);
                     p.xz *= mat2(c, -s, s, c);
                     
-                    vCol = mix(vec3(1.0, 0.05, 0.25), vec3(0.0, 1.0, 0.8), m + (p.y + 5.5)/11.0);
+                    // 颜色混合
+                    vCol = mix(vec3(1.0, 0.05, 0.2), vec3(0.0, 1.0, 0.8), m + (p.y + 6.0)/12.0);
                     
+                    // --- 核心修复：智能光感 ---
+                    // 当 m=0 (礼物) 时，透明度降低到 0.2
+                    // 当 m=1 (树) 时，透明度恢复到 1.0
+                    // 这就是解决白屏的关键！
+                    vAlpha = 0.2 + 0.8 * m;
+
                     vec4 mvp = modelViewMatrix * vec4(p, 1.0);
-                    // 核心修复点：强制粒子上限，解决白屏
-                    gl_PointSize = clamp((6.0 * aRand + 2.0) * (20.0 / -mvp.z), 1.0, 50.0);
+                    // 限制粒子大小
+                    gl_PointSize = clamp((7.0 * aRand + 2.0) * (20.0 / -mvp.z), 1.0, 40.0);
                     gl_Position = projectionMatrix * mvp;
                 }
             `,
             fragmentShader: `
-                varying vec3 vCol;
+                varying vec3 vCol; varying float vAlpha;
                 void main() {
                     vec2 uv = gl_PointCoord - vec2(0.5);
                     float d = length(uv);
-                    // 极致拉丝光感算法
-                    float star = 0.01 / d + 0.004 / abs(uv.x * 25.0) + 0.004 / abs(uv.y * 25.0);
-                    gl_FragColor = vec4(vCol * star, star);
+                    // 降低发光计算的强度
+                    float glow = 0.005 / d; 
+                    // 限制 Glow 最大值，防止无限大导致的白屏
+                    glow = min(glow, 1.0);
+                    
+                    gl_FragColor = vec4(vCol * glow, glow * vAlpha);
                 }
             `,
             transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
@@ -116,18 +137,19 @@
 
         scene.add(new THREE.Points(geo, mat));
 
-        // --- 3. 稳定交互逻辑 ---
+        // --- 3. 交互逻辑 ---
         async function init() {
             const video = document.getElementById('video-input');
             const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
             
-            hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.6 });
+            hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.5 });
             hands.onResults((res) => {
                 if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
                     const lm = res.multiHandLandmarks[0];
+                    // 计算垂直张合距离
                     const d = Math.abs(lm[8].y - lm[0].y);
-                    // 数值缓冲层
-                    targetMorph = THREE.MathUtils.smoothstep(d, 0.18, 0.45);
+                    // 调整映射范围
+                    targetMorph = THREE.MathUtils.smoothstep(d, 0.15, 0.45);
                 } else {
                     targetMorph = 0;
                 }
@@ -139,23 +161,21 @@
             });
             
             cam.start().then(() => {
-                document.getElementById('status-ui').style.opacity = '0';
+                document.getElementById('ui').style.opacity = '0';
             });
         }
 
-        // --- 4. 帧率锁定渲染循环 ---
+        // --- 4. 循环 ---
         function loop(timestamp) {
             requestAnimationFrame(loop);
-
-            // 针对 iPhone 120Hz 优化：限制更新频率
             const delta = timestamp - lastTime;
-            if (delta < 16) return; // 约 60fps
+            if (delta < 16) return; // 锁定 60fps
             lastTime = timestamp;
 
             const t = timestamp * 0.001;
             mat.uniforms.uTime.value = t;
             
-            // 极致平滑插值 (滤波器：减缓数据跳变)
+            // 增加阻尼感，过渡更慢，给粒子扩散的时间
             currentMorph += (targetMorph - currentMorph) * 0.05;
             mat.uniforms.uMorph.value = currentMorph;
             
