@@ -3,19 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ultimate Christmas Magic</title>
+    <title>Christmas Miracle Pro</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; }
-        #canvas-container { width: 100vw; height: 100vh; position: fixed; background: #000; }
+        body { margin: 0; overflow: hidden; background: #050505; } /* 背景调成深黑灰，更有质感 */
+        #canvas-container { width: 100vw; height: 100vh; position: fixed; background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%); }
         #ui { 
-            position: fixed; top: 10%; left: 50%; transform: translateX(-50%); 
+            position: fixed; top: 15%; left: 50%; transform: translateX(-50%); 
             color: #ffcc00; z-index: 100; pointer-events: none; 
             font-family: sans-serif; text-shadow: 0 0 10px #ffcc00; 
-            text-align: center; width: 100%;
+            text-align: center; width: 100%; letter-spacing: 4px; font-weight: bold;
+            opacity: 0; transition: opacity 1s;
         }
         #video-input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-        .loading { animation: pulse 1s infinite; font-size: 14px; letter-spacing: 2px; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
     <script type="importmap">
         {
@@ -27,7 +26,7 @@
     </script>
 </head>
 <body>
-    <div id="ui" class="loading">✨ 正在点亮树顶星...</div>
+    <div id="ui">✨ 握拳变礼物 · 张手变魔法 ✨</div>
     <video id="video-input" playsinline></video>
     <div id="canvas-container"></div>
 
@@ -42,13 +41,10 @@
 
         let targetMorph = 0, currentMorph = 0;
 
-        // --- 1. 场景 ---
+        // --- 1. 场景与高画质设置 ---
         const scene = new THREE.Scene();
-        // 增加背景雾气，减少死黑感
-        scene.fog = new THREE.FogExp2(0x000000, 0.02);
-        
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 2, 16); // 稍微拉远，看清全貌
+        camera.position.set(0, 1.5, 15); // 最佳观赏距离
 
         const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -57,113 +53,169 @@
 
         const composer = new EffectComposer(renderer);
         composer.addPass(new RenderPass(scene, camera));
-        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.8, 0.4, 0.85);
+        // Bloom 参数微调：光晕更细腻，不糊成一片
+        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.6, 0.5, 0.85);
         composer.addPass(bloom);
 
-        // --- 2. 主角粒子系统 (树 + 星星 + 装饰) ---
-        const count = 35000;
+        // --- 2. 主角粒子系统 (礼物 <-> 树) ---
+        const count = 40000;
         const geo = new THREE.BufferGeometry();
-        const pGift = new Float32Array(count * 3);
-        const pTree = new Float32Array(count * 3);
-        const attributes = new Float32Array(count * 3); // x=type, y=random, z=offset
+        const pStart = new Float32Array(count * 3); // 礼物状态位置
+        const pEnd = new Float32Array(count * 3);   // 树状态位置
+        const extra = new Float32Array(count * 3);  // x=类型, y=随机值, z=偏移
+
+        // 辅助函数：生成正方体表面的点
+        function getBoxPoint(size) {
+            // 随机选择一个面 (0-5)
+            const face = Math.floor(Math.random() * 6);
+            const u = (Math.random() - 0.5) * size;
+            const v = (Math.random() - 0.5) * size;
+            const w = size * 0.5;
+            
+            // 定义丝带区域 (十字交叉)
+            const ribbonWidth = size * 0.2;
+            let isRibbon = (Math.abs(u) < ribbonWidth || Math.abs(v) < ribbonWidth);
+
+            // 根据面构建坐标
+            switch(face) {
+                case 0: return { vec: [w, u, v], isRibbon: isRibbon }; // 右
+                case 1: return { vec: [-w, u, v], isRibbon: isRibbon }; // 左
+                case 2: return { vec: [u, w, v], isRibbon: isRibbon }; // 上
+                case 3: return { vec: [u, -w, v], isRibbon: isRibbon }; // 下
+                case 4: return { vec: [u, v, w], isRibbon: isRibbon }; // 前
+                case 5: return { vec: [u, v, -w], isRibbon: isRibbon }; // 后
+            }
+        }
 
         for (let i = 0; i < count; i++) {
             const i3 = i * 3;
-            // 粒子类型：0=普通树叶, 1=树顶星, 2=装饰彩球
-            let type = 0; 
-            if (i < 500) type = 1; // 前500个做星星
-            else if (i < 2000) type = 2; // 接下来1500个做装饰
+            // 粒子类型定义: 
+            // 0=普通红盒/绿叶, 1=金色丝带/星星, 2=装饰球
+            let type = 0;
+            const rand = Math.random();
 
-            // --- A. 礼物形态 (通用) ---
-            // 礼物盒稍微紧凑一点，深红色核心
-            pGift[i3] = (Math.random() - 0.5) * 5.0;
-            pGift[i3+1] = (Math.random() - 0.5) * 5.0;
-            pGift[i3+2] = (Math.random() - 0.5) * 5.0;
+            // --- A. 礼物形态 (精细建模) ---
+            const boxSize = 4.5;
+            const boxInfo = getBoxPoint(boxSize);
+            const boxPos = boxInfo.vec;
+            
+            // 如果是丝带区域，标记为金色类型
+            if (boxInfo.isRibbon) type = 1;
+            
+            pStart[i3] = boxPos[0];
+            pStart[i3+1] = boxPos[1];
+            pStart[i3+2] = boxPos[2];
 
-            // --- B. 圣诞树形态 (分层设计) ---
-            if (type === 1) { 
-                // === 树顶星 (五角星形状) ===
-                const starAngle = (i / 500) * Math.PI * 2 * 5; // 绕5圈
-                const starR = Math.pow(Math.random(), 0.5) * 1.5 * (Math.sin(starAngle * 5) * 0.5 + 1.0); // 五角形状
-                pTree[i3] = Math.cos(starAngle) * starR * 0.8;
-                pTree[i3+1] = 6.5 + Math.random() * 0.5; // 树顶高度
-                pTree[i3+2] = Math.sin(starAngle) * starR * 0.8;
-            } 
-            else {
-                // === 树身 (螺旋) ===
-                const t = (i - 500) / (count - 500); // 归一化高度
-                const spiral = i % 12; // 12条主螺旋
-                const angle = t * Math.PI * 20 + (spiral * Math.PI / 6);
+            // --- B. 圣诞树形态 (分层螺旋) ---
+            let treeX, treeY, treeZ;
+            
+            // 前 400 个粒子强制做树顶星
+            if (i < 400) {
+                type = 1; // 星星一定是金色
+                const angle = (i/400) * Math.PI * 10;
+                const r = Math.pow(Math.random(), 0.5) * 1.2 * (Math.sin(angle * 2.5)*0.5 + 1.2); // 五角星方程
+                treeX = Math.cos(angle) * r;
+                treeY = 7.0 + Math.random() * 0.5; // 树顶高度
+                treeZ = Math.sin(angle) * r;
+            } else {
+                // 树身
+                const t = (i - 400) / (count - 400);
                 
-                // 树的半径曲线 (上窄下宽)
-                let radius = Math.pow(1.0 - t, 1.2) * 6.0;
-                // 如果是装饰球，稍微往外飘一点
-                if (type === 2) radius *= 1.1; 
+                // 偶尔出现装饰球 (5% 概率)
+                if (rand > 0.95 && type !== 1) type = 2;
 
-                pTree[i3] = Math.cos(angle) * radius;
-                pTree[i3+1] = t * 11 - 5.5;
-                pTree[i3+2] = Math.sin(angle) * radius;
+                // 螺旋参数
+                const spiral = i % 15; // 15条主旋臂
+                const angle = t * Math.PI * 22 + (spiral * Math.PI / 7.5);
+                let radius = Math.pow(1.1 - t, 1.4) * 6.5; // 上窄下宽
+                
+                // 增加松针的毛绒感 (随机偏移)
+                const noise = (Math.random() - 0.5) * 0.5;
+                radius += noise;
+
+                // 装饰球稍微挂外面一点
+                if (type === 2) radius *= 1.08;
+
+                treeX = Math.cos(angle) * radius;
+                treeY = t * 12 - 6;
+                treeZ = Math.sin(angle) * radius;
             }
 
-            attributes[i3] = type;
-            attributes[i3+1] = Math.random();
-            attributes[i3+2] = Math.random() * Math.PI * 2;
+            pEnd[i3] = treeX;
+            pEnd[i3+1] = treeY;
+            pEnd[i3+2] = treeZ;
+
+            extra[i3] = type;      // 类型
+            extra[i3+1] = rand;    // 随机值
+            extra[i3+2] = Math.random(); // 备用
         }
 
-        geo.setAttribute('position', new THREE.BufferAttribute(pGift, 3));
-        geo.setAttribute('aTarget', new THREE.BufferAttribute(pTree, 3));
-        geo.setAttribute('aAttr', new THREE.BufferAttribute(attributes, 3));
+        geo.setAttribute('position', new THREE.BufferAttribute(pStart, 3)); // 初始位置=礼物
+        geo.setAttribute('aTarget', new THREE.BufferAttribute(pEnd, 3));    // 目标位置=树
+        geo.setAttribute('aExtra', new THREE.BufferAttribute(extra, 3));
 
         const mat = new THREE.ShaderMaterial({
             uniforms: { uTime: { value: 0 }, uMorph: { value: 0 } },
             vertexShader: `
                 uniform float uTime; uniform float uMorph;
-                attribute vec3 aTarget; attribute vec3 aAttr;
+                attribute vec3 aTarget; attribute vec3 aExtra;
                 varying vec3 vCol; varying float vAlpha;
                 
                 void main() {
-                    float type = aAttr.x;
-                    float rand = aAttr.y;
+                    float type = aExtra.x;
+                    float rnd = aExtra.y;
                     
-                    float m = clamp(uMorph, 0.0, 1.0);
-                    vec3 p = mix(position, aTarget, m);
+                    // 1. 位置插值 (加一点缓动)
+                    vec3 p = mix(position, aTarget, smoothstep(0.0, 1.0, uMorph));
                     
-                    // 动态旋转
-                    float rot = uTime * (0.1 + rand * 0.1);
+                    // 2. 旋转动画 (随时间微动，增加灵性)
+                    float rotSpeed = 0.2 + rnd * 0.2;
+                    float rot = uTime * rotSpeed;
                     float c = cos(rot); float s = sin(rot);
                     p.xz *= mat2(c, -s, s, c);
-                    
-                    // --- 色彩管理系统 ---
-                    vec3 color;
-                    if(type > 0.9 && type < 1.1) { 
-                        // 类型1: 树顶星 (金黄 + 闪白)
-                        color = vec3(1.0, 0.9, 0.2); 
-                    } else if (type > 1.9) {
-                        // 类型2: 装饰球 (红/金/蓝 随机)
-                        if(rand > 0.6) color = vec3(1.0, 0.1, 0.2); // 红
-                        else if(rand > 0.3) color = vec3(0.1, 0.5, 1.0); // 蓝
-                        else color = vec3(1.0, 0.8, 0.1); // 金
+
+                    // 3. 颜色系统 (精细化)
+                    vec3 col;
+                    if (uMorph < 0.5) {
+                        // === 礼物状态颜色 ===
+                        if (type == 1.0) col = vec3(1.0, 0.8, 0.1); // 金丝带
+                        else col = vec3(0.8, 0.05, 0.1); // 红盒子
                     } else {
-                        // 类型0: 树叶 (随高度渐变的极光绿)
-                        color = mix(vec3(0.1, 0.6, 0.3), vec3(0.4, 1.0, 0.8), (p.y + 6.0)/12.0);
-                        // 礼物状态时，全部变成深红/金
-                        color = mix(vec3(0.8, 0.1, 0.1), color, m);
+                        // === 圣诞树状态颜色 ===
+                        if (type == 1.0) col = vec3(1.0, 0.9, 0.3); // 星星/金丝
+                        else if (type == 2.0) {
+                            // 装饰球多彩色
+                            if (rnd > 0.6) col = vec3(1.0, 0.1, 0.2); // 红球
+                            else if (rnd > 0.3) col = vec3(0.2, 0.5, 1.0); // 蓝球
+                            else col = vec3(1.0, 0.8, 0.1); // 金球
+                        } else {
+                            // 树叶 (带一点渐变的绿)
+                            col = mix(vec3(0.05, 0.4, 0.2), vec3(0.2, 0.8, 0.5), (p.y+6.0)/12.0);
+                        }
                     }
-                    vCol = color;
 
-                    // 防白屏逻辑
-                    vAlpha = 0.3 + 0.7 * m; // 礼物态变暗
-                    if(type == 1.0) vAlpha = 1.0; // 星星永远亮
+                    // 状态过渡时的颜色平滑混合
+                    vec3 giftCol = (type == 1.0) ? vec3(1.0, 0.8, 0.1) : vec3(0.8, 0.05, 0.1);
+                    // 这里做一个简单的混合，防止颜色跳变
+                    if (uMorph > 0.0 && uMorph < 1.0 && type != 1.0 && type != 2.0) {
+                         vCol = mix(giftCol, col, uMorph);
+                    } else {
+                         vCol = col;
+                    }
 
+                    // 4. 大小与透明度
                     vec4 mvp = modelViewMatrix * vec4(p, 1.0);
                     
-                    // 粒子大小控制
-                    float baseSize = 4.0;
-                    if(type == 1.0) baseSize = 15.0; // 星星很大
-                    else if(type == 2.0) baseSize = 8.0; // 装饰球中等
+                    // 根据类型决定大小
+                    float sizeBase = 4.0; 
+                    if (type == 1.0) sizeBase = 6.0; // 丝带/星星大一点
+                    if (type == 2.0) sizeBase = 8.0; // 装饰球最大
                     
-                    gl_PointSize = clamp((baseSize * rand + 2.0) * (20.0 / -mvp.z), 0.0, 60.0);
+                    gl_PointSize = sizeBase * (1.0 + rnd) * (18.0 / -mvp.z);
                     gl_Position = projectionMatrix * mvp;
+                    
+                    // 握拳时稍微变暗一点点，防止太刺眼
+                    vAlpha = 0.6 + 0.4 * uMorph; 
                 }
             `,
             fragmentShader: `
@@ -171,30 +223,40 @@
                 void main() {
                     vec2 uv = gl_PointCoord - vec2(0.5);
                     float d = length(uv);
-                    // 十字光芒滤镜
-                    float star = 0.01 / (d + 0.01) + 0.002 / (abs(uv.x) + 0.01) + 0.002 / (abs(uv.y) + 0.01);
-                    star = min(star, 1.0);
-                    gl_FragColor = vec4(vCol * star, star * vAlpha);
+                    if (d > 0.5) discard; // 圆形裁切
+                    
+                    // 核心优化：光晕更实，不再是一团雾
+                    float glow = 1.0 - d * 2.0;
+                    glow = pow(glow, 1.5); 
+                    
+                    gl_FragColor = vec4(vCol, glow * vAlpha);
                 }
             `,
             transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
         });
         scene.add(new THREE.Points(geo, mat));
 
-        // --- 3. 环境氛围组 (背景星尘) ---
-        const bgCount = 500;
+        // --- 3. 背景微尘系统 (独立出来，解决"大绿颗粒"问题) ---
+        // 这里的粒子非常小，非常淡，只做氛围
+        const bgCount = 1000;
         const bgGeo = new THREE.BufferGeometry();
         const bgPos = new Float32Array(bgCount * 3);
-        for(let i=0; i<bgCount*3; i++) bgPos[i] = (Math.random() - 0.5) * 40; // 散布在更大空间
+        for(let i=0; i<bgCount*3; i++) {
+            bgPos[i] = (Math.random() - 0.5) * 50; // 范围很大
+        }
         bgGeo.setAttribute('position', new THREE.BufferAttribute(bgPos, 3));
         const bgMat = new THREE.PointsMaterial({
-            color: 0x44aa88, size: 0.5, transparent: true, opacity: 0.6, 
+            color: 0x88ccaa, // 淡淡的青绿色
+            size: 0.2,       // 极小！
+            transparent: true, 
+            opacity: 0.4,
             blending: THREE.AdditiveBlending
         });
-        const bgSystem = new THREE.Points(bgGeo, bgMat);
-        scene.add(bgSystem);
+        const bgParticles = new THREE.Points(bgGeo, bgMat);
+        scene.add(bgParticles);
 
-        // --- 4. 交互修复 ---
+
+        // --- 4. 交互逻辑 (保持顺畅) ---
         async function init() {
             const video = document.getElementById('video-input');
             const hands = new Hands({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`});
@@ -203,14 +265,11 @@
             hands.onResults((res) => {
                 if (res.multiHandLandmarks && res.multiHandLandmarks.length > 0) {
                     const lm = res.multiHandLandmarks[0];
-                    // 改进判定：计算大拇指尖(4)和食指尖(8)的距离，
-                    // 并且除以手掌大小(0->9的距离)进行归一化，防止远近影响
                     const handSize = Math.hypot(lm[0].x - lm[9].x, lm[0].y - lm[9].y);
                     const fingerGap = Math.hypot(lm[8].x - lm[4].x, lm[8].y - lm[4].y);
-                    
-                    // 如果指尖距离小于手掌大小的 30%，认为是握拳
                     const ratio = fingerGap / (handSize + 0.001); 
-                    targetMorph = THREE.MathUtils.smoothstep(ratio, 0.2, 0.6);
+                    // 宽松判定：很容易就能控制
+                    targetMorph = THREE.MathUtils.smoothstep(ratio, 0.2, 0.7);
                 } else {
                     targetMorph = 0;
                 }
@@ -222,31 +281,29 @@
             });
             
             cam.start().then(() => {
-                document.getElementById('ui').innerHTML = "🎅 握拳变礼物 · 张手变星星";
-                setTimeout(() => { document.getElementById('ui').style.opacity = 0; }, 3000);
+                document.getElementById('ui').style.opacity = 1;
+                setTimeout(() => { document.getElementById('ui').style.opacity = 0; }, 5000);
             });
         }
 
-        // --- 5. 循环 ---
         function loop() {
             requestAnimationFrame(loop);
             const t = performance.now() * 0.001;
             mat.uniforms.uTime.value = t;
             
-            // 平滑形态
-            currentMorph += (targetMorph - currentMorph) * 0.05;
+            currentMorph += (targetMorph - currentMorph) * 0.08;
             mat.uniforms.uMorph.value = currentMorph;
             
-            // 场景缓慢旋转
+            // 整体缓缓旋转
             scene.rotation.y += 0.002;
             
-            // 背景粒子缓慢上升
-            const positions = bgSystem.geometry.attributes.position.array;
+            // 背景微尘缓缓上升
+            const bgArr = bgParticles.geometry.attributes.position.array;
             for(let i=1; i<bgCount*3; i+=3) {
-                positions[i] += 0.01;
-                if(positions[i] > 20) positions[i] = -20;
+                bgArr[i] += 0.02;
+                if(bgArr[i] > 25) bgArr[i] = -25;
             }
-            bgSystem.geometry.attributes.position.needsUpdate = true;
+            bgParticles.geometry.attributes.position.needsUpdate = true;
 
             composer.render();
         }
